@@ -5,8 +5,8 @@ N2N_OSNAME=$(shell uname -p)
 ########
 
 CC=gcc
-DEBUG?=-g3
-#OPTIMIZATION?=-O2
+#DEBUG?=-g3
+OPTIMIZATION?=-O2
 WARN?=-Wall -Wshadow -Wpointer-arith -Wmissing-declarations -Wnested-externs
 
 #Ultrasparc64 users experiencing SIGBUS should try the following gcc options
@@ -25,7 +25,8 @@ ifeq ($(N2N_OPTION_AES), "yes")
     LIBS_EDGE_OPT+=-lcrypto
 endif
 
-CFLAGS+=$(DEBUG) $(OPTIMIZATION) $(WARN) $(OPTIONS) $(PLATOPTS) $(N2N_DEFINES)
+
+CFLAGS+=$(DEBUG) $(OPTIMIZATION) -fPIC $(WARN) $(OPTIONS) $(PLATOPTS) $(N2N_DEFINES)
 
 INSTALL=install
 MKDIR=mkdir -p
@@ -64,16 +65,16 @@ DOCS=edge.8.gz supernode.1.gz n2n_v2.7.gz
 all: $(APPS) $(DOCS)
 
 edge: edge.c $(N2N_LIB) n2n_wire.h n2n.h Makefile
-	$(CC) $(CFLAGS) edge.c $(N2N_LIB) $(LIBS_EDGE) -o edge
+	$(CC) -pie $(CFLAGS) edge.c $(N2N_LIB) $(LIBS_EDGE) -o edge
 
 test: test.c $(N2N_LIB) n2n_wire.h n2n.h Makefile
-	$(CC) $(CFLAGS) test.c $(N2N_LIB) $(LIBS_EDGE) -o test
+	$(CC) -pie $(CFLAGS) test.c $(N2N_LIB) $(LIBS_EDGE) -o test
 
 supernode: sn.c $(N2N_LIB) n2n.h Makefile
-	$(CC) $(CFLAGS) sn.c $(N2N_LIB) $(LIBS_SN) -o supernode
+	$(CC) -pie $(CFLAGS) sn.c $(N2N_LIB) $(LIBS_SN) -o supernode
 
 benchmark: benchmark.c $(N2N_LIB) n2n_wire.h n2n.h Makefile
-	$(CC) $(CFLAGS) benchmark.c $(N2N_LIB) $(LIBS_SN) -o benchmark
+	$(CC) -pie $(CFLAGS) benchmark.c $(N2N_LIB) $(LIBS_SN) -o benchmark
 
 .c.o: n2n.h n2n_keyfile.h n2n_transforms.h n2n_wire.h twofish.h Makefile
 	$(CC) $(CFLAGS) -c $<

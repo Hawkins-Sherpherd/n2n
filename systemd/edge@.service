@@ -1,0 +1,9 @@
+[Unit]
+Description=N2N network edge instance %i
+
+[Service]
+ExecStart=/usr/local/bin/edge -u 99 -g 99 -f -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS -s $NETMASK $PARAMETER
+EnvironmentFile=/etc/n2n/%i.conf
+
+[Install]
+WantedBy=multi-user.target
