@@ -235,8 +235,7 @@ void tuntap_close(struct tuntap_dev *tuntap) {
 
 /* Fill out the ip_addr value from the interface. Called to pick up dynamic
  * address changes. */
-void tuntap_get_address(struct tuntap_dev *tuntap)
-{
+void tuntap_get_address(struct tuntap_dev *tuntap) {
     int _sock, res;
     struct ifreq ifr;
     char buf[16];

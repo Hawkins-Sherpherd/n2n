@@ -57,13 +57,13 @@ int open_wintap(struct tuntap_dev *device,
     for (i = 0; ; i++) {
         len = sizeof(adapterid);
         if(RegEnumKeyEx(key, i, (LPTSTR)adapterid, &len, 0, 0, 0, NULL))
-        break;
+            break;
 
         /* Find out more about this adapter */
 
         _snprintf(regpath, sizeof(regpath), "%s\\%s\\Connection", NETWORK_CONNECTIONS_KEY, adapterid);
         if(RegOpenKeyEx(HKEY_LOCAL_MACHINE, (LPCSTR)regpath, 0, KEY_READ, &key2))
-        continue;
+            continue;
 
         len = sizeof(adaptername);
         err = RegQueryValueEx(key2, "Name", 0, 0, adaptername, &len);
@@ -139,13 +139,13 @@ int open_wintap(struct tuntap_dev *device,
     device->mtu = mtu;
 
     printf("Open device [name=%s][ip=%s][ifName=%s][MTU=%d][mac=%02X:%02X:%02X:%02X:%02X:%02X]\n",
-        device->device_name, device_ip, device->ifName, device->mtu,
-        device->mac_addr[0] & 0xFF,
-        device->mac_addr[1] & 0xFF,
-        device->mac_addr[2] & 0xFF,
-        device->mac_addr[3] & 0xFF,
-        device->mac_addr[4] & 0xFF,
-        device->mac_addr[5] & 0xFF);
+           device->device_name, device_ip, device->ifName, device->mtu,
+           device->mac_addr[0] & 0xFF,
+           device->mac_addr[1] & 0xFF,
+           device->mac_addr[2] & 0xFF,
+           device->mac_addr[3] & 0xFF,
+           device->mac_addr[4] & 0xFF,
+           device->mac_addr[5] & 0xFF);
 
     /* ****************** */
 
@@ -167,11 +167,9 @@ int open_wintap(struct tuntap_dev *device,
     if(system(cmd) == 0) {
         device->ip_addr = inet_addr(device_ip);
         device->device_mask = inet_addr(device_mask);
-        printf("Device %s set to %s/%s\n",
-        device->ifName, device_ip, device_mask);
+        printf("Device %s set to %s/%s\n", device->ifName, device_ip, device_mask);
     } else
-        printf("WARNING: Unable to set device %s IP address [%s]\n",
-                device->ifName, cmd);
+        printf("WARNING: Unable to set device %s IP address [%s]\n", device->ifName, cmd);
 
     /* ****************** */
 
@@ -198,8 +196,7 @@ int open_wintap(struct tuntap_dev *device,
 
 /* ************************************************ */
 
-int tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, int len)
-{
+int tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, int len) {
     DWORD read_size, last_err;
 
     ResetEvent(tuntap->overlap_read.hEvent);
@@ -222,11 +219,10 @@ int tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, int len)
 }
 /* ************************************************ */
 
-int tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, int len)
-{
-  DWORD write_size;
+int tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, int len) {
+    DWORD write_size;
 
-  //printf("tun_write(len=%d)\n", len);
+    //printf("tun_write(len=%d)\n", len);
 
     ResetEvent(tuntap->overlap_write.hEvent);
     if (WriteFile(tuntap->device_handle,
@@ -260,15 +256,13 @@ int tuntap_open(struct tuntap_dev *device,
                 char *device_ip, 
                 char *device_mask, 
                 const char * device_mac, 
-                int mtu)
-{
+                int mtu) {
     return(open_wintap(device, address_mode, device_ip, device_mask, device_mac, mtu));
 }
 
 /* ************************************************ */
 
-void tuntap_close(struct tuntap_dev *tuntap)
-{
+void tuntap_close(struct tuntap_dev *tuntap) {
     CloseHandle(tuntap->device_handle);
 }
 

@@ -1449,12 +1449,12 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
         if ( 0 == memcmp( udp_buf, "help", 4 ) )
         {
             msg_len=0;
-            ++traceLevel;
 
             msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
                                  "Help for edge management console:\n"
                                  "  stop    Gracefully exit edge\n"
                                  "  help    This help message\n"
+                                 "  list    List peers"
                                  "  +verb   Increase verbosity of logging\n"
                                  "  -verb   Decrease verbosity of logging\n"
                                  "  reload  Re-read the keyschedule\n"
@@ -1463,6 +1463,34 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
             sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
                     (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
 
+            return;
+        }
+
+        if ( 0 == memcmp (udp_buf, "list", 4 ) )
+        {
+            msg_len=0;
+    
+            macstr_t mac;
+            n2n_sock_str_t sockaddr;
+            struct peer_info* peer = eee->pending_peers;
+            while(peer) {
+                sock_to_cstr(sockaddr, &peer->sock);
+                msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+                    "%s %s\n", macaddr_str(mac, peer->mac_addr), sockaddr
+                );
+                peer = peer->next;
+            }
+            msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len), "-\n");
+            peer = eee->known_peers;
+            while(peer) {
+                sock_to_cstr(sockaddr, &peer->sock);                
+                msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+                    "%s %s\n", macaddr_str(mac, peer->mac_addr), sockaddr
+                );
+                peer = peer->next;
+            }
+            sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
+                    (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
             return;
         }
 
