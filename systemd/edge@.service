@@ -2,7 +2,9 @@
 Description=N2N network edge instance %i
 
 [Service]
-ExecStart=/usr/local/bin/edge -u 99 -g 99 -f -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS -s $NETMASK $PARAMETER
+DynamicUser=Yes
+CapabilityBoundingSet=CAP_NET_ADMIN
+ExecStart=/usr/local/bin/edge -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS -s $NETMASK $PARAMETER
 EnvironmentFile=/etc/n2n/%i.conf
 
 [Install]
