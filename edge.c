@@ -1454,7 +1454,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
                                  "Help for edge management console:\n"
                                  "  stop    Gracefully exit edge\n"
                                  "  help    This help message\n"
-                                 "  list    List peers"
+                                 "  list    List peers\n"
                                  "  +verb   Increase verbosity of logging\n"
                                  "  -verb   Decrease verbosity of logging\n"
                                  "  reload  Re-read the keyschedule\n"
