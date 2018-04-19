@@ -354,18 +354,20 @@ static int n2n_tick_transop( n2n_edge_t * eee, time_t now )
     /* Tests are done in order that most preferred transform is last and causes
      * tx_transop_idx to be left at most preferred valid transform. */
     tst = (eee->transop[N2N_TRANSOP_NULL_IDX].tick)( &(eee->transop[N2N_TRANSOP_NULL_IDX]), now );
-    tst = (eee->transop[N2N_TRANSOP_AESCBC_IDX].tick)( &(eee->transop[N2N_TRANSOP_AESCBC_IDX]), now );
-    if ( tst.can_tx )
-    {
-        traceEvent( TRACE_DEBUG, "can_tx AESCBC (idx=%u)", (unsigned int)N2N_TRANSOP_AESCBC_IDX );
-        trop = N2N_TRANSOP_AESCBC_IDX;
-    }
+    
 
     tst = (eee->transop[N2N_TRANSOP_TF_IDX].tick)( &(eee->transop[N2N_TRANSOP_TF_IDX]), now );
     if ( tst.can_tx )
     {
         traceEvent( TRACE_DEBUG, "can_tx TF (idx=%u)", (unsigned int)N2N_TRANSOP_TF_IDX );
         trop = N2N_TRANSOP_TF_IDX;
+    }
+
+    tst = (eee->transop[N2N_TRANSOP_AESCBC_IDX].tick)( &(eee->transop[N2N_TRANSOP_AESCBC_IDX]), now );
+    if ( tst.can_tx )
+    {
+        traceEvent( TRACE_DEBUG, "can_tx AESCBC (idx=%u)", (unsigned int)N2N_TRANSOP_AESCBC_IDX );
+        trop = N2N_TRANSOP_AESCBC_IDX;
     }
 
     if ( trop != eee->tx_transop_idx )
@@ -400,7 +402,7 @@ static int edge_init_keyschedule( n2n_edge_t * eee )
 
     if ( numSpecs > 0 )
     {
-        traceEvent( TRACE_NORMAL, "keyfile = %s read -> %d specs.\n", optarg, (signed int)numSpecs);
+        traceEvent( TRACE_NORMAL, "keyfile = %s read -> %d specs.\n", eee->keyschedule, (signed int)numSpecs);
 
         for ( i=0; i < (size_t)numSpecs; ++i )
         {
@@ -556,7 +558,6 @@ static void send_register( n2n_edge_t * eee,
 {
     uint8_t pktbuf[N2N_PKT_BUF_SIZE];
     size_t idx;
-    ssize_t sent;
     n2n_common_t cmn;
     n2n_REGISTER_t reg;
     n2n_sock_str_t sockbuf;
@@ -580,7 +581,7 @@ static void send_register( n2n_edge_t * eee,
                 sock_to_cstr( sockbuf, remote_peer ) );
 
 
-    sent = sendto_sock( eee->udp_sock, pktbuf, idx, remote_peer );
+    sendto_sock( eee->udp_sock, pktbuf, idx, remote_peer );
 
 }
 
@@ -591,7 +592,6 @@ static void send_register_super( n2n_edge_t * eee,
 {
     uint8_t pktbuf[N2N_PKT_BUF_SIZE];
     size_t idx;
-    ssize_t sent;
     n2n_common_t cmn;
     n2n_REGISTER_SUPER_t reg;
     n2n_sock_str_t sockbuf;
@@ -621,7 +621,7 @@ static void send_register_super( n2n_edge_t * eee,
                 sock_to_cstr( sockbuf, supernode ) );
 
 
-    sent = sendto_sock( eee->udp_sock, pktbuf, idx, supernode );
+    sendto_sock( eee->udp_sock, pktbuf, idx, supernode );
 
 }
 
@@ -633,7 +633,6 @@ static void send_register_ack( n2n_edge_t * eee,
 {
     uint8_t pktbuf[N2N_PKT_BUF_SIZE];
     size_t idx;
-    ssize_t sent;
     n2n_common_t cmn;
     n2n_REGISTER_ACK_t ack;
     n2n_sock_str_t sockbuf;
@@ -657,7 +656,7 @@ static void send_register_ack( n2n_edge_t * eee,
                 sock_to_cstr( sockbuf, remote_peer ) );
 
 
-    sent = sendto_sock( eee->udp_sock, pktbuf, idx, remote_peer );
+    sendto_sock( eee->udp_sock, pktbuf, idx, remote_peer );
 }
 
 
@@ -1135,7 +1134,6 @@ static int send_PACKET( n2n_edge_t * eee,
                         size_t pktlen )
 {
     int dest;
-    ssize_t s;
     n2n_sock_str_t sockbuf;
     n2n_sock_t destination;
 
@@ -1154,7 +1152,7 @@ static int send_PACKET( n2n_edge_t * eee,
 
     traceEvent( TRACE_INFO, "send_PACKET to %s", sock_to_cstr( sockbuf, &destination ) );
 
-    s = sendto_sock( eee->udp_sock, pktbuf, pktlen, &destination );
+    sendto_sock( eee->udp_sock, pktbuf, pktlen, &destination );
 
     return 0;
 }
@@ -1421,7 +1419,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 {
     uint8_t             udp_buf[N2N_PKT_BUF_SIZE];      /* Compete UDP packet */
     ssize_t             recvlen;
-    ssize_t             sendlen;
+    ssize_t             sendlen __attribute__((unused));
     struct sockaddr_in  sender_sock;
     socklen_t           i;
     size_t              msg_len;
@@ -2033,7 +2031,6 @@ int main(int argc, char* argv[])
                 strncpy( eee.keyschedule, optarg, N2N_PATHNAME_MAXLEN-1 );
                 eee.keyschedule[N2N_PATHNAME_MAXLEN-1]=0; /* strncpy does not add NULL if the source has no NULL. */
                 traceEvent(TRACE_DEBUG, "keyfile = '%s'\n", eee.keyschedule);
-                fprintf(stderr, "keyfile = '%s'\n", eee.keyschedule);
             }
             break;
         }

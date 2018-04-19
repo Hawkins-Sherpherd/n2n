@@ -8,8 +8,8 @@
 
 #if defined(N2N_HAVE_AES)
 
-
-#include "openssl/aes.h"
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #ifndef _MSC_VER
 /* Not included in Visual Studio 2008 */
 #include <strings.h> /* index() */
@@ -26,10 +26,12 @@ struct sa_aes
 {
     n2n_cipherspec_t    spec;           /* cipher spec parameters */
     n2n_sa_t            sa_id;          /* security association index */
-    AES_KEY             enc_key;        /* tx key */
     n2n_aes_ivec_t      enc_ivec;       /* tx CBC state */
-    AES_KEY             dec_key;        /* tx key */
     n2n_aes_ivec_t      dec_ivec;       /* tx CBC state */
+    EVP_CIPHER_CTX      *ctx;           /* cipher context */
+    const EVP_CIPHER    *cipher;        /* libcrypt cipher */
+    int                 block_size;     /* cipher block size */
+    uint8_t             key[N2N_MAX_KEYSIZE]; /* keydata */
 };
 
 typedef struct sa_aes sa_aes_t;
@@ -64,6 +66,7 @@ static int transop_deinit_aes( n2n_trans_op_t * arg )
             sa_aes_t * sa = &(priv->sa[i]);
 
             sa->sa_id=0;
+            EVP_CIPHER_CTX_free( sa->ctx );
         }
     
         priv->num_sa=0;
@@ -86,7 +89,6 @@ static size_t aes_choose_tx_sa( transop_aes_t * priv )
 #define TRANSOP_AES_NONCE_SIZE   4
 #define TRANSOP_AES_SA_SIZE      4
 
-
 #define AES256_KEY_BYTES (256/8)
 #define AES192_KEY_BYTES (192/8)
 #define AES128_KEY_BYTES (128/8)
@@ -96,19 +98,19 @@ static size_t aes_choose_tx_sa( transop_aes_t * priv )
  * The value returned will be one of AES128_KEY_BYTES, AES192_KEY_BYTES or
  * AES256_KEY_BYTES.
  */
-static size_t aes_best_keysize(size_t numBytes)
+static const EVP_CIPHER* aes_best_keysize(size_t numBytes)
 {
     if (numBytes >= AES256_KEY_BYTES )
     {
-        return AES256_KEY_BYTES;
+        return EVP_aes_256_cbc();
     }
     else if (numBytes >= AES192_KEY_BYTES)
     {
-        return AES192_KEY_BYTES;
+        return EVP_aes_192_cbc();
     }
     else
     {
-        return AES128_KEY_BYTES;
+        return EVP_aes_128_cbc();
     }
 }
 
@@ -137,6 +139,7 @@ static int transop_encode_aes( n2n_trans_op_t * arg,
         if ( (in_len + TRANSOP_AES_NONCE_SIZE + TRANSOP_AES_SA_SIZE + TRANSOP_AES_VER_SIZE) <= out_len )
         {
             int len=-1;
+            int len3=-1;
             size_t idx=0;
             sa_aes_t * sa;
             size_t tx_sa_num = 0;
@@ -161,19 +164,21 @@ static int transop_encode_aes( n2n_trans_op_t * arg,
              * written in first followed by the packet payload. The whole
              * contents of assembly are encrypted. */
             pnonce = (uint32_t *)assembly;
-            *pnonce = rand();
+            RAND_bytes((void*)pnonce, sizeof(uint32_t));
             memcpy( assembly + TRANSOP_AES_NONCE_SIZE, inbuf, in_len );
 
-            /* Need at least one encrypted byte at the end for the padding. */
-            len2 = ( (len / AES_BLOCK_SIZE) + 1) * AES_BLOCK_SIZE; /* Round up to next whole AES adding at least one byte. */
-            assembly[ len2-1 ]=(len2-len);
+            /* Round up to next whole AES adding at least one byte. */
+            len2 = ( (len / sa->block_size) + 1 ) * sa->block_size;
+            assembly[ len2-1 ] = (len2-len);
             traceEvent( TRACE_DEBUG, "padding = %u", assembly[ len2-1 ] );
 
-            memset( &(sa->enc_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
-            AES_cbc_encrypt( assembly, /* source */
-                             outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, /* dest */
-                             len2, /* enc size */
-                             &(sa->enc_key), sa->enc_ivec, 1 /* encrypt */ );
+            EVP_CIPHER_CTX_reset(sa->ctx);
+            memset( &(sa->enc_ivec), 0, N2N_AES_IVEC_SIZE );
+
+            EVP_EncryptInit( sa->ctx, sa->cipher, sa->key, sa->enc_ivec );
+            EVP_CIPHER_CTX_set_padding(sa->ctx, 0);
+            EVP_EncryptUpdate( sa->ctx, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, &len3, assembly, len2 );
+            EVP_EncryptFinal( sa->ctx, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE + len3, &len3 );
 
             len2 += TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE; /* size of data carried in UDP. */
         }
@@ -230,6 +235,7 @@ static int transop_decode_aes( n2n_trans_op_t * arg,
                                    size_t in_len )
 {
     int len=0;
+    //int len2 = 0;
     transop_aes_t * priv = (transop_aes_t *)arg->priv;
     uint8_t assembly[N2N_PKT_BUF_SIZE];
 
@@ -260,16 +266,18 @@ static int transop_decode_aes( n2n_trans_op_t * arg,
 
                 len = (in_len - (TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE));
                 
-                if ( 0 == (len % AES_BLOCK_SIZE ) )
+                if ( 0 == (len % sa->block_size) )
                 {
                     uint8_t padding;
+                    int len3 = -1;
 
-                    memset( &(sa->dec_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
-                    AES_cbc_encrypt( (inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE),
-                                     assembly, /* destination */
-                                     len, 
-                                     &(sa->dec_key),
-                                     sa->dec_ivec, 0 /* decrypt */ );
+                    EVP_CIPHER_CTX_reset(sa->ctx);
+                    memset( &(sa->dec_ivec), 0, N2N_AES_IVEC_SIZE );
+
+                    EVP_DecryptInit( sa->ctx, sa->cipher, sa->key, sa->dec_ivec );
+                    EVP_CIPHER_CTX_set_padding(sa->ctx, 0);
+                    EVP_DecryptUpdate( sa->ctx, assembly, &len3, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len );
+                    EVP_DecryptFinal( sa->ctx, assembly + len3, &len3 );
 
                     /* last byte is how much was padding: max value should be
                      * AES_BLOCKSIZE-1 */
@@ -292,12 +300,12 @@ static int transop_decode_aes( n2n_trans_op_t * arg,
                     }
                     else
                     {
-                        traceEvent( TRACE_WARNING, "UDP payload decryption failed." );
+                        traceEvent( TRACE_WARNING, "UDP payload decryption failed");
                     }
                 }
                 else
                 {
-                    traceEvent( TRACE_WARNING, "Encrypted length %d is not a multiple of AES_BLOCK_SIZE (%d)", len, AES_BLOCK_SIZE );
+                    traceEvent( TRACE_WARNING, "Encrypted length %d is not a multiple of AES_BLOCK_SIZE (%d)", len, sa->block_size );
                     len = 0;
                 }
 
@@ -331,7 +339,6 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
     int retval = 1;
     ssize_t pstat=-1;
     transop_aes_t * priv = (transop_aes_t *)arg->priv;
-    uint8_t keybuf[N2N_MAX_KEYSIZE];
 
     if ( priv->num_sa < N2N_AES_NUM_SA )
     {
@@ -352,35 +359,19 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
             priv->sa[priv->num_sa].spec = *cspec;
             priv->sa[priv->num_sa].sa_id = strtoul(tmp, NULL, 10);
 
-            memset( keybuf, 0, N2N_MAX_KEYSIZE );
-            pstat = n2n_parse_hex( keybuf, N2N_MAX_KEYSIZE, sep+1, s );
+            memset( priv->sa[priv->num_sa].key, 0, N2N_MAX_KEYSIZE );
+            pstat = n2n_parse_hex( priv->sa[priv->num_sa].key, N2N_MAX_KEYSIZE, sep+1, s );
             if ( pstat > 0 )
             {
                 /* pstat is number of bytes read into keybuf. */
                 sa_aes_t * sa = &(priv->sa[priv->num_sa]);
-                size_t aes_keysize_bytes;
-                size_t aes_keysize_bits;
-
-                /* Clear out any old possibly longer key matter. */
-                memset( &(sa->enc_key), 0, sizeof(AES_KEY) );
-                memset( &(sa->dec_key), 0, sizeof(AES_KEY) );
-
-                memset( &(sa->enc_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
-                memset( &(sa->dec_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
-
-                aes_keysize_bytes = aes_best_keysize(pstat);
-                aes_keysize_bits = 8 * aes_keysize_bytes;
-
-                /* Use N2N_MAX_KEYSIZE because the AES key needs to be of fixed
-                 * size. If fewer bits specified then the rest will be
-                 * zeroes. AES acceptable key sizes are 128, 192 and 256
-                 * bits. */
-                AES_set_encrypt_key( keybuf, aes_keysize_bits, &(sa->enc_key));
-                AES_set_decrypt_key( keybuf, aes_keysize_bits, &(sa->dec_key));
-                /* Leave ivecs set to all zeroes */
+                memset( &(sa->enc_ivec), 0, N2N_AES_IVEC_SIZE );
+                memset( &(sa->dec_ivec), 0, N2N_AES_IVEC_SIZE );
+                sa->cipher = aes_best_keysize(pstat);
+                sa->block_size = EVP_CIPHER_block_size(sa->cipher);
                 
                 traceEvent( TRACE_DEBUG, "transop_addspec_aes sa_id=%u, %u bits data=%s.\n",
-                            priv->sa[priv->num_sa].sa_id, aes_keysize_bits, sep+1);
+                            priv->sa[priv->num_sa].sa_id, EVP_CIPHER_key_length(sa->cipher) * 8, sep+1);
                 
                 ++(priv->num_sa);
                 retval = 0;
@@ -480,10 +471,10 @@ int transop_aes_init( n2n_trans_op_t * ttt )
             sa = &(priv->sa[i]);
             sa->sa_id=0;
             memset( &(sa->spec), 0, sizeof(n2n_cipherspec_t) );
-            memset( &(sa->enc_key), 0, sizeof(AES_KEY) );
             memset( &(sa->enc_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
-            memset( &(sa->dec_key), 0, sizeof(AES_KEY) );
             memset( &(sa->dec_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
+            memset( &(sa->key), 0, sizeof(N2N_MAX_KEYSIZE) );
+            sa->ctx = EVP_CIPHER_CTX_new();
         }
 
         retval = 0;

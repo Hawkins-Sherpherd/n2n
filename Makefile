@@ -5,7 +5,7 @@ N2N_OSNAME=$(shell uname -p)
 ########
 
 CC=gcc
-#DEBUG?=-g3
+DEBUG?=-g3
 OPTIMIZATION?=-O2
 WARN?=-Wall -Wshadow -Wpointer-arith -Wmissing-declarations -Wnested-externs
 
@@ -21,7 +21,7 @@ N2N_OPTION_AES?="yes"
 #N2N_OPTION_AES=no
 
 ifeq ($(N2N_OPTION_AES), "yes")
-    N2N_DEFINES+="-DN2N_HAVE_AES"
+    N2N_DEFINES+=-DN2N_HAVE_AES
     LIBS_EDGE_OPT+=-lcrypto
 endif
 

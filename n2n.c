@@ -381,11 +381,6 @@ size_t clear_peer_list( struct peer_info ** peer_list )
 
 static uint8_t hex2byte( const char * s )
 {
-  char tmp[3];
-  tmp[0]=s[0];
-  tmp[1]=s[1];
-  tmp[2]=0; /* NULL term */
-
   return((uint8_t)strtol( s, NULL, 16 ));
 }
 
@@ -414,7 +409,7 @@ extern int str2mac( uint8_t * outmac /* 6 bytes */, const char * s )
 extern char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock )
 {
-    int r;
+    __attribute__((unused)) int r;
 
     if ( NULL == out ) { return NULL; }
     memset(out, 0, N2N_SOCKBUF_SIZE);
