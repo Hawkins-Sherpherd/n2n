@@ -3,7 +3,7 @@ Description=N2N network edge instance %i
 
 [Service]
 DynamicUser=Yes
-CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
 ExecStart=/usr/local/bin/edge -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS -s $NETMASK $PARAMETER
 EnvironmentFile=/etc/n2n/%i.conf
 

@@ -20,8 +20,6 @@
 #ifdef __linux__
 #include <net/if_arp.h>
 
-#define N2N_LINUX_SYSTEMCMD_SIZE 128
-
 static void read_mac(char *ifname, n2n_mac_t mac_addr) {
     int _sock, res;
     struct ifreq ifr;
