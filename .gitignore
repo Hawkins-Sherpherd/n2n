@@ -1,1 +1,7 @@
 build/
+*.o
+*.a
+edge
+supernode
+*.gz
+win32/DotNet
