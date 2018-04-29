@@ -7,10 +7,10 @@ set(N2N_OSNAME ${CMAKE_SYSTEM})
 
 # N2n specific params
 if(NOT DEFINED N2N_OPTION_AES)
-set(N2N_OPTION_AES ON)
+set(N2N_OPTION_AES OFF)
 endif(NOT DEFINED N2N_OPTION_AES)
 
-add_definitions(-DN2N_VERSION='\"${N2N_VERSION}\"' -DN2N_OSNAME='\"${N2N_OSNAME}\"')
+add_definitions(-DN2N_VERSION=\"${N2N_VERSION}\" -DN2N_OSNAME=\"${N2N_OSNAME}\")
 
 if(N2N_OPTION_AES)
 add_definitions(-DN2N_HAVE_AES)
@@ -30,16 +30,6 @@ endif(NOT DEFINED CMAKE_BUILD_TYPE)
 #Ultrasparc64 users experiencing SIGBUS should try the following gcc options
 #(thanks to Robert Gibbon) 
 #PLATOPTS_SPARC64=-mcpu=ultrasparc -pipe -fomit-frame-pointer -ffast-math -finline-functions -fweb -frename-registers -mapp-regs
-
-# None
-set(CMAKE_C_FLAGS "-Wall -Wshadow -Wpointer-arith -Wmissing-declarations -Wnested-externs")
-set(CMAKE_CXX_FLAGS "-Wall -Wshadow -Wpointer-arith -Wmissing-declarations -Wnested-externs")
-# Debug 
-set(CMAKE_C_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
-# Release
-set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 
 ## DEBUG FOR CMAKE
 #message(${N2N_VERSION}) 
@@ -66,6 +56,7 @@ add_library(n2n n2n.c
 if(DEFINED WIN32)
 add_subdirectory(win32)
 target_link_libraries(n2n n2n_win32)
+
 endif(DEFINED WIN32)
 
 if(N2N_OPTION_AES)
@@ -80,12 +71,17 @@ target_link_libraries(edge n2n)
 
 add_executable(supernode sn.c)
 target_link_libraries(supernode n2n)
+if(DEFINED WIN32)
+set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")
+endif(DEFINED WIN32)
 
+if(NOT DEFINED WIN32)
 add_executable(test test.c)
 target_link_libraries(test n2n)
 
 add_executable(benchmark benchmark.c)
 target_link_libraries(benchmark n2n)
+endif(NOT DEFINED WIN32)
 
 install(TARGETS edge supernode
         RUNTIME DESTINATION sbin

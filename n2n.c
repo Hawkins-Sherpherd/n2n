@@ -53,7 +53,7 @@ SOCKET open_socket(int local_port, int bind_any) {
     return(-1);
   }
 
-#ifndef WIN32
+#ifndef _WIN32
   /* fcntl(sock_fd, F_SETFL, O_NONBLOCK); */
 #endif
 
@@ -72,9 +72,6 @@ SOCKET open_socket(int local_port, int bind_any) {
 }
 
 
-
-
-
 int traceLevel = 2 /* NORMAL */;
 int useSyslog = 0, syslog_opened = 0;
 
@@ -88,7 +85,7 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
     char theDate[N2N_TRACE_DATESIZE];
     char *extra_msg = "";
     time_t theTime = time(NULL);
-#ifdef WIN32
+#ifdef _WIN32
 	int i;
 #endif
 
@@ -112,7 +109,7 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
 
     while(buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 
-#ifndef WIN32
+#ifndef _WIN32
     if(useSyslog) {
       if(!syslog_opened) {
         openlog("n2n", LOG_PID, LOG_DAEMON);
@@ -142,32 +139,32 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
 
 /* addr should be in network order. Things are so much simpler that way. */
 char* intoa(uint32_t /* host order */ addr, char* buf, uint16_t buf_len) {
-  char *cp, *retStr;
-  uint8_t byteval;
-  int n;
+    char *cp, *retStr;
+    uint8_t byteval;
+    int n;
 
-  cp = &buf[buf_len];
-  *--cp = '\0';
+    cp = &buf[buf_len];
+    *--cp = '\0';
 
-  n = 4;
-  do {
-    byteval = addr & 0xff;
-    *--cp = byteval % 10 + '0';
-    byteval /= 10;
-    if (byteval > 0) {
-      *--cp = byteval % 10 + '0';
-      byteval /= 10;
-      if (byteval > 0)
-        *--cp = byteval + '0';
-    }
-    *--cp = '.';
-    addr >>= 8;
-  } while (--n > 0);
+    n = 4;
+    do {
+        byteval = addr & 0xff;
+        *--cp = byteval % 10 + '0';
+        byteval /= 10;
+        if (byteval > 0) {
+        *--cp = byteval % 10 + '0';
+        byteval /= 10;
+        if (byteval > 0)
+            *--cp = byteval + '0';
+        }
+        *--cp = '.';
+        addr >>= 8;
+    } while (--n > 0);
 
-  /* Convert the string to lowercase */
-  retStr = (char*)(cp+1);
+    /* Convert the string to lowercase */
+    retStr = (char*)(cp+1);
 
-  return(retStr);
+    return(retStr);
 }
 
 /* *********************************************** */
@@ -176,8 +173,8 @@ char * macaddr_str( macstr_t buf,
                     const n2n_mac_t mac )
 {
     snprintf(buf, N2N_MACSTR_SIZE, "%02X:%02X:%02X:%02X:%02X:%02X",
-             mac[0] & 0xFF, mac[1] & 0xFF, mac[2] & 0xFF,
-             mac[3] & 0xFF, mac[4] & 0xFF, mac[5] & 0xFF);
+        mac[0] & 0xFF, mac[1] & 0xFF, mac[2] & 0xFF,
+        mac[3] & 0xFF, mac[4] & 0xFF, mac[5] & 0xFF);
     return(buf);
 }
 
@@ -199,19 +196,19 @@ uint8_t is_multi_broadcast(const uint8_t * dest_mac) {
 /* *********************************************** */
 
 char* msg_type2str(uint16_t msg_type) {
-  switch(msg_type) {
-  case MSG_TYPE_REGISTER: return("MSG_TYPE_REGISTER");
-  case MSG_TYPE_DEREGISTER: return("MSG_TYPE_DEREGISTER");
-  case MSG_TYPE_PACKET: return("MSG_TYPE_PACKET");
-  case MSG_TYPE_REGISTER_ACK: return("MSG_TYPE_REGISTER_ACK");
-  case MSG_TYPE_REGISTER_SUPER: return("MSG_TYPE_REGISTER_SUPER");
-  case MSG_TYPE_REGISTER_SUPER_ACK: return("MSG_TYPE_REGISTER_SUPER_ACK");
-  case MSG_TYPE_REGISTER_SUPER_NAK: return("MSG_TYPE_REGISTER_SUPER_NAK");
-  case MSG_TYPE_FEDERATION: return("MSG_TYPE_FEDERATION");
-  default: return("???");
-  }
+    switch(msg_type) {
+        case MSG_TYPE_REGISTER: return("MSG_TYPE_REGISTER");
+        case MSG_TYPE_DEREGISTER: return("MSG_TYPE_DEREGISTER");
+        case MSG_TYPE_PACKET: return("MSG_TYPE_PACKET");
+        case MSG_TYPE_REGISTER_ACK: return("MSG_TYPE_REGISTER_ACK");
+        case MSG_TYPE_REGISTER_SUPER: return("MSG_TYPE_REGISTER_SUPER");
+        case MSG_TYPE_REGISTER_SUPER_ACK: return("MSG_TYPE_REGISTER_SUPER_ACK");
+        case MSG_TYPE_REGISTER_SUPER_NAK: return("MSG_TYPE_REGISTER_SUPER_NAK");
+        case MSG_TYPE_FEDERATION: return("MSG_TYPE_FEDERATION");
+        default: return("???");
+    }
 
-  return("???");
+    return("???");
 }
 
 /* *********************************************** */
@@ -315,35 +312,28 @@ size_t purge_expired_registrations( struct peer_info ** peer_list ) {
 size_t purge_peer_list( struct peer_info ** peer_list,
                         time_t purge_before )
 {
-  struct peer_info *scan;
-  struct peer_info *prev;
-  size_t retval=0;
+    struct peer_info *scan;
+    struct peer_info *prev;
+    size_t retval=0;
 
-  scan = *peer_list;
-  prev = NULL;
-  while(scan != NULL)
-    {
-      if(scan->last_seen < purge_before)
-        {
-	  struct peer_info *next = scan->next;
+    scan = *peer_list;
+    prev = NULL;
+    while(scan != NULL) {
+        if(scan->last_seen < purge_before) {
+            struct peer_info *next = scan->next;
 
-	  if(prev == NULL)
-            {
-	      *peer_list = next;
-            }
-	  else
-            {
-	      prev->next = next;
+            if(prev == NULL) {
+                *peer_list = next;
+            } else {
+                prev->next = next;
             }
 
-	  ++retval;
-	  free(scan);
-	  scan = next;
-        }
-      else
-        {
-	  prev = scan;
-	  scan = scan->next;
+            ++retval;
+            free(scan);
+            scan = next;
+        } else {
+            prev = scan;
+            scan = scan->next;
         }
     }
 
@@ -359,16 +349,12 @@ size_t clear_peer_list( struct peer_info ** peer_list )
 
     scan = *peer_list;
     prev = NULL;
-    while(scan != NULL)
-    {
+    while(scan != NULL) {
         struct peer_info *next = scan->next;
 
-        if(prev == NULL)
-        {
+        if(prev == NULL) {
             *peer_list = next;
-        }
-        else
-        {
+        } else {
             prev->next = next;
         }
 
@@ -410,7 +396,7 @@ extern int str2mac( uint8_t * outmac /* 6 bytes */, const char * s )
 extern char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock )
 {
-    __attribute__((unused)) int r;
+    int r;
 
     if ( NULL == out ) { return NULL; }
     memset(out, 0, N2N_SOCKBUF_SIZE);

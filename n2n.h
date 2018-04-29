@@ -47,7 +47,7 @@
 /* #define N2N_CAN_NAME_IFACE */
 
 /* Moved here to define _CRT_SECURE_NO_WARNINGS before all the including takes place */
-#ifdef WIN32
+#ifdef _WIN32
 #include "win32/n2n_win32.h"
 #undef N2N_HAVE_DAEMON
 #undef N2N_HAVE_SETUID
@@ -57,7 +57,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-#ifndef WIN32
+#ifndef _WIN32
 #include <netdb.h>
 #endif
 
@@ -69,7 +69,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#ifndef WIN32
+#ifndef _WIN32
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -113,21 +113,20 @@ typedef struct ether_hdr ether_hdr_t;
 #include <unistd.h>
 
 #define closesocket(a) close(a)
-#endif /* #ifndef WIN32 */
+#endif /* #ifndef _WIN32 */
 
 #include <string.h>
-
 #include <stdarg.h>
 
 #ifdef WIN32
 #include "win32/wintap.h"
-#endif /* #ifdef WIN32 */
+#endif /* #ifdef _WIN32 */
 
 #include "n2n_wire.h"
 
 /* N2N_IFNAMSIZ is needed on win32 even if dev_name is not used after declaration */
 #define N2N_IFNAMSIZ            16 /* 15 chars * NULL */
-#ifndef WIN32
+#ifndef _WIN32
 typedef struct tuntap_dev {
   int           fd;
   uint8_t       mac_addr[6];
@@ -137,7 +136,7 @@ typedef struct tuntap_dev {
 } tuntap_dev;
 
 #define SOCKET int
-#endif /* #ifndef WIN32 */
+#endif /* #ifndef _WIN32 */
 
 #define QUICKLZ               1
 

@@ -10,6 +10,12 @@
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#define UNICODE
+#define _UNICODE
 
 #if defined(__MINGW32__)
 /* should be defined here and before winsock gets included */
@@ -20,7 +26,16 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <winioctl.h>
+#include <ws2ipdef.h>
+#include <iphlpapi.h>
+#include <objbase.h>
 
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "ole32.lib")
+#endif
 
 #include "wintap.h"
 
@@ -45,7 +60,10 @@ typedef int ssize_t;
 typedef unsigned long in_addr_t;
 
 
-#define EAFNOSUPPORT   WSAEAFNOSUPPORT 
+#ifdef EAFNOSUPPORT
+#undef EAFNOSUPPORT
+#endif
+#define EAFNOSUPPORT   WSAEAFNOSUPPORT
 #define MAX(a,b) (a > b ? a : b)
 #define MIN(a,b) (a < b ? a : b)
 
@@ -95,8 +113,8 @@ struct ip {
 
 typedef struct tuntap_dev {
 	HANDLE device_handle;
-	char *device_name;
-	char *ifName;
+	PWSTR  device_name;
+	NET_IFINDEX  ifIdx;
 	OVERLAPPED overlap_read, overlap_write;
 	uint8_t      mac_addr[6];
 	uint32_t     ip_addr, device_mask;

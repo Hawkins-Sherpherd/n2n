@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "n2n.h": "c",
+        "n2n_win32.h": "c",
+        "*.rh": "c"
+    }
+}

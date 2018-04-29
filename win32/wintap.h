@@ -5,8 +5,8 @@
 #ifndef _WINTAP_H_
 #define _WINTAP_H_
 
-#undef UNICODE
-#undef _UNICODE
+#define UNICODE
+#define _UNICODE
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <ws2tcpip.h>
@@ -42,17 +42,17 @@
 // Registry keys
 //=================
 
-#define ADAPTER_KEY "SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
-#define NETWORK_CONNECTIONS_KEY "SYSTEM\\CurrentControlSet\\Control\\Network\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
+#define ADAPTER_KEY L"SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
+#define NETWORK_CONNECTIONS_KEY L"SYSTEM\\CurrentControlSet\\Control\\Network\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
 
 //======================
 // Filesystem prefixes
 //======================
 
-#define USERMODEDEVICEDIR "\\\\.\\Global\\"
-#define SYSDEVICEDIR      "\\Device\\"
-#define USERDEVICEDIR     "\\DosDevices\\Global\\"
-#define TAPSUFFIX         ".tap"
+#define USERMODEDEVICEDIR L"\\\\.\\Global\\"
+#define SYSDEVICEDIR      L"\\Device\\"
+#define USERDEVICEDIR     L"\\DosDevices\\Global\\"
+#define TAPSUFFIX         L".tap"
 
 //=========================================================
 // TAP_COMPONENT_ID -- This string defines the TAP driver
@@ -60,7 +60,7 @@
 // simultaneously.
 //=========================================================
 
-#define TAP_COMPONENT_ID "tap0801"
+#define TAP_COMPONENT_ID L"tap0801"
 
 extern void initWin32();
 

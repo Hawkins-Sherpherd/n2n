@@ -1419,7 +1419,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 {
     uint8_t             udp_buf[N2N_PKT_BUF_SIZE];      /* Compete UDP packet */
     ssize_t             recvlen;
-    ssize_t             sendlen __attribute__((unused));
+    ssize_t             sendlen;
     struct sockaddr_in  sender_sock;
     socklen_t           i;
     size_t              msg_len;
