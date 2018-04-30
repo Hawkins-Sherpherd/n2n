@@ -1419,7 +1419,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 {
     uint8_t             udp_buf[N2N_PKT_BUF_SIZE];      /* Compete UDP packet */
     ssize_t             recvlen;
-    ssize_t             sendlen;
+    ssize_t             sendlen __unused;
     struct sockaddr_in  sender_sock;
     socklen_t           i;
     size_t              msg_len;
@@ -2252,12 +2252,6 @@ int main(int argc, char* argv[])
     }
 
 
-#ifndef WIN32
-    /* If running suid root then we need to setuid before using the force. */
-    setuid( 0 );
-    /* setgid( 0 ); */
-#endif
-
     if ( 0 == strcmp( "dhcp", ip_mode ) )
     {
         traceEvent(TRACE_NORMAL, "Dynamic IP address assignment enabled.");
@@ -2281,6 +2275,16 @@ int main(int argc, char* argv[])
         setreuid( userid, userid );
         setregid( groupid, groupid );
     }
+    /* drop capabilities */
+#ifdef __linux__
+    prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L);
+    {
+        cap_t caps;
+        caps = cap_init();
+        cap_set_proc(caps);
+        cap_free(caps);
+    }
+#endif
 #endif
 
     if(local_port > 0)

@@ -77,8 +77,11 @@
 #include <pthread.h>
 
 #ifdef __linux__
+#include <sys/prctl.h>
+#include <sys/capability.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#include <linux/prctl.h>
 #define N2N_CAN_NAME_IFACE 1
 #endif /* #ifdef __linux__ */
 
@@ -117,6 +120,12 @@ typedef struct ether_hdr ether_hdr_t;
 
 #include <string.h>
 #include <stdarg.h>
+
+#ifdef __GNUC__
+#define __unused __attribute__((unused))
+#else
+#define __unused
+#endif
 
 #ifdef WIN32
 #include "win32/wintap.h"

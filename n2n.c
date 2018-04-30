@@ -396,22 +396,20 @@ extern int str2mac( uint8_t * outmac /* 6 bytes */, const char * s )
 extern char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock )
 {
-    int r;
-
     if ( NULL == out ) { return NULL; }
     memset(out, 0, N2N_SOCKBUF_SIZE);
 
     if ( AF_INET6 == sock->family )
     {
         /* INET6 not written yet */
-        r = snprintf( out, N2N_SOCKBUF_SIZE, "XXXX:%hu", sock->port );
+        snprintf( out, N2N_SOCKBUF_SIZE, "XXXX:%hu", sock->port );
         return out;
     }
     else
     {
         const uint8_t * a = sock->addr.v4;
-        r = snprintf( out, N2N_SOCKBUF_SIZE, "%hu.%hu.%hu.%hu:%hu", 
-                      (a[0] & 0xff), (a[1] & 0xff), (a[2] & 0xff), (a[3] & 0xff), sock->port );
+        snprintf( out, N2N_SOCKBUF_SIZE, "%hu.%hu.%hu.%hu:%hu", 
+                   (a[0] & 0xff), (a[1] & 0xff), (a[2] & 0xff), (a[3] & 0xff), sock->port );
         return out;
     }
 }
