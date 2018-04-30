@@ -146,7 +146,6 @@ static void send_packet2net(n2n_edge_t * eee,
 
 /* parse the configuration file */
 static int readConfFile(const char * filename, char * const linebuffer) {
-  struct stat stats;
   FILE    *   fd;
   char    *   buffer = NULL;
 
@@ -156,7 +155,7 @@ static int readConfFile(const char * filename, char * const linebuffer) {
     return -1;
   }
 
-  if (stat(filename, &stats)) {
+  if (access(filename, R_OK)) {
     if (errno == ENOENT)
       traceEvent(TRACE_ERROR, "parameter file %s not found/unable to access\n", filename);
     else
@@ -273,7 +272,7 @@ static char ** buildargv(int * effectiveargc, char * const linebuffer) {
  */
 static int edge_init(n2n_edge_t * eee)
 {
-#ifdef WIN32
+#ifdef _WIN32
     initWin32();
 #endif
     memset(eee, 0, sizeof(n2n_edge_t));
@@ -504,10 +503,10 @@ static void help() {
   printf("-b                       | Periodically resolve supernode IP\n");
   printf("                         : (when supernodes are running on dynamic IPs)\n");
   printf("-p <local port>          | Fixed local UDP port.\n");
-#ifndef WIN32
+#ifndef _WIN32
   printf("-u <UID>                 | User ID (numeric) to use when privileges are dropped.\n");
   printf("-g <GID>                 | Group ID (numeric) to use when privileges are dropped.\n");
-#endif /* ifndef WIN32 */
+#endif /* ifndef _WIN32 */
 #ifdef N2N_HAVE_DAEMON
   printf("-f                       | Do not fork and run as a daemon; rather run in foreground.\n");
 #endif /* #ifdef N2N_HAVE_DAEMON */
@@ -1793,7 +1792,7 @@ static void readFromIPSocket( n2n_edge_t * eee )
 /* ***************************************************** */
 
 
-#ifdef WIN32
+#ifdef _WIN32
 static DWORD tunReadThread(LPVOID lpArg )
 {
     n2n_edge_t *eee = (n2n_edge_t*)lpArg;
@@ -1964,7 +1963,7 @@ int main(int argc, char* argv[])
     int     mtu = DEFAULT_MTU;
     int     got_s = 0;
 
-#ifndef WIN32
+#ifndef _WIN32
     uid_t   userid=0; /* root is the only guaranteed ID */
     gid_t   groupid=0; /* root is the only guaranteed ID */
 #endif
@@ -1978,6 +1977,26 @@ int main(int argc, char* argv[])
 
     n2n_edge_t eee; /* single instance for this program */
 
+#ifdef __linux__
+    cap_t caps, caps_original;
+    cap_value_t caps_array[] = { CAP_NET_ADMIN, CAP_SETUID, CAP_SETGID };
+    cap_flag_value_t is_flag_set;
+    
+    caps_original = cap_get_proc();
+    /* drop all capabilities, permit some for later */
+    caps = cap_init();
+    cap_set_flag(caps, CAP_PERMITTED, 1, caps_array, CAP_SET);
+    cap_get_flag(caps_original, CAP_SETUID, CAP_PERMITTED, &is_flag_set);
+    if (is_flag_set == CAP_SET)
+        cap_set_flag(caps, CAP_PERMITTED, 1, caps_array+1, CAP_SET);
+    cap_get_flag(caps_original, CAP_SETGID, CAP_PERMITTED, &is_flag_set);
+    if (is_flag_set == CAP_SET)
+        cap_set_flag(caps, CAP_PERMITTED, 1, caps_array+2, CAP_SET);
+    cap_set_proc(caps);
+
+    cap_free(caps);
+    cap_free(caps_original);
+#endif
     if (-1 == edge_init(&eee) )
     {
         traceEvent( TRACE_ERROR, "Failed in edge_init" );
@@ -1989,7 +2008,7 @@ int main(int argc, char* argv[])
         encrypt_key = strdup( getenv( "N2N_KEY" ));
     }
 
-#ifdef WIN32
+#ifdef _WIN32
     tuntap_dev_name[0] = '\0';
 #endif
     memset(&(eee.supernode), 0, sizeof(eee.supernode));
@@ -2003,7 +2022,7 @@ int main(int argc, char* argv[])
     }
     snprintf(linebuffer, MAX_CMDLINE_BUFFER_LENGTH, "%s",argv[0]);
 
-#ifdef WIN32
+#ifdef _WIN32
     for(i=0; i < (int)strlen(linebuffer); i++)
         if(linebuffer[i] == '\\') linebuffer[i] = '/';
 #endif
@@ -2082,7 +2101,7 @@ int main(int argc, char* argv[])
             break;
         }
 
-#ifndef WIN32
+#ifndef _WIN32
         case 'u': /* unprivileged uid */
         {
             userid = atoi(optarg);
@@ -2200,11 +2219,34 @@ int main(int argc, char* argv[])
         } /* end switch */
     }
 
+#ifdef __linux__
+    /* set effective capability to set uid/gid */
+    caps = cap_init();
+    cap_set_flag(caps, CAP_PERMITTED, 3, caps_array, CAP_SET);
+    cap_set_flag(caps, CAP_EFFECTIVE, 2, caps_array + 1, CAP_SET);
+    cap_set_proc(caps);
+    cap_free(caps);
+    /* keep effective capabilities */
+    prctl(PR_SET_KEEPCAPS, 1L);
+    /* use capabilities and drop root uid early */
+    if ( (userid != 0) || (groupid != 0 ) ) {
+        setregid( groupid, groupid );
+        setreuid( userid, userid );
+    }
+    /* reset in case of failure */
+    prctl(PR_SET_KEEPCAPS, 0L);
+    /* drop set uid/gid */
+    caps = cap_init();
+    cap_set_flag(caps, CAP_PERMITTED, 1, caps_array, CAP_SET);
+    cap_set_proc(caps);
+    cap_free(caps);
+#endif
 
 #ifdef N2N_HAVE_DAEMON
     if ( eee.daemon )
     {
         useSyslog=1; /* traceEvent output now goes to syslog. */
+        prctl(PR_SET_KEEPCAPS, 1L);
         if ( -1 == daemon( 0, 0 ) )
         {
             traceEvent( TRACE_ERROR, "Failed to become daemon." );
@@ -2212,10 +2254,7 @@ int main(int argc, char* argv[])
         }
     }
 #endif /* #ifdef N2N_HAVE_DAEMON */
-
-
     traceEvent( TRACE_NORMAL, "Starting n2n edge %s %s", n2n_sw_version, n2n_sw_buildDate );
-
 
     for (i=0; i< N2N_EDGE_NUM_SUPERNODES; ++i )
     {
@@ -2263,29 +2302,36 @@ int main(int argc, char* argv[])
         traceEvent(TRACE_NORMAL, "ip_mode='%s'", ip_mode);        
     }
 
+#ifdef __linux__
+    /* set effective capabilitiy NET_ADMIN */
+    caps = cap_init();
+    cap_set_flag(caps, CAP_EFFECTIVE, 1, caps_array, CAP_SET);
+    cap_set_flag(caps, CAP_PERMITTED, 1, caps_array, CAP_SET);
+    cap_set_proc(caps);
+    cap_free(caps);
+#endif
+
     if(tuntap_open(&(eee.device), tuntap_dev_name, ip_mode, ip_addr, netmask, device_mac, mtu) < 0)
         return(-1);
 
-#ifndef WIN32
+#if defined(__linux__)
+    /* drop capabilities */
+    prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L);
+    caps = cap_init();
+    cap_set_proc(caps);
+    cap_free(caps);
+#elif !defined(_WIN32)
     if ( (userid != 0) || (groupid != 0 ) ) {
         traceEvent(TRACE_NORMAL, "Interface up. Dropping privileges to uid=%d, gid=%d", 
                    (signed int)userid, (signed int)groupid);
 
         /* Finished with the need for root privileges. Drop to unprivileged user. */
-        setreuid( userid, userid );
         setregid( groupid, groupid );
-    }
-    /* drop capabilities */
-#ifdef __linux__
-    prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L);
-    {
-        cap_t caps;
-        caps = cap_init();
-        cap_set_proc(caps);
-        cap_free(caps);
+        setreuid( userid, userid );
     }
 #endif
-#endif
+    
+
 
     if(local_port > 0)
         traceEvent(TRACE_NORMAL, "Binding to local port %d", (signed int)local_port);
@@ -2336,7 +2382,7 @@ static int run_loop(n2n_edge_t * eee )
     time_t lastTransop=0;
 
 
-#ifdef WIN32
+#ifdef _WIN32
     startTunReadThread(eee);
 #endif
 
@@ -2358,7 +2404,7 @@ static int run_loop(n2n_edge_t * eee )
         FD_SET(eee->udp_sock, &socket_mask);
         FD_SET(eee->udp_mgmt_sock, &socket_mask);
         max_sock = max( eee->udp_sock, eee->udp_mgmt_sock );
-#ifndef WIN32
+#ifndef _WIN32
         FD_SET(eee->device.fd, &socket_mask);
         max_sock = max( max_sock, eee->device.fd );
 #endif
@@ -2394,7 +2440,7 @@ static int run_loop(n2n_edge_t * eee )
                 readFromMgmtSocket(eee, &keep_running);
             }
 
-#ifndef WIN32
+#ifndef _WIN32
             if(FD_ISSET(eee->device.fd, &socket_mask))
             {
                 /* Read an ethernet frame from the TAP socket. Write on the IP

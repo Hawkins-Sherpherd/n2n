@@ -1,6 +1,6 @@
 
 N2N_VERSION=2.1.0
-N2N_OSNAME=$(shell uname -p)
+N2N_OSNAME=$(shell uname -o)
 
 ########
 
@@ -55,6 +55,9 @@ LIBS_SN=
 ifeq ($(shell uname), SunOS)
 LIBS_EDGE+=-lsocket -lnsl
 LIBS_SN+=-lsocket -lnsl
+endif
+ifeq ($(shell uname), Linux)
+LIBS_EDGE+=-lcap
 endif
 
 APPS=edge
