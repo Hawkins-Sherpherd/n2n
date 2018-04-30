@@ -2302,13 +2302,17 @@ int main(int argc, char* argv[])
         traceEvent(TRACE_NORMAL, "ip_mode='%s'", ip_mode);        
     }
 
-#ifdef __linux__
+#if defined(__linux__)
     /* set effective capabilitiy NET_ADMIN */
     caps = cap_init();
     cap_set_flag(caps, CAP_EFFECTIVE, 1, caps_array, CAP_SET);
     cap_set_flag(caps, CAP_PERMITTED, 1, caps_array, CAP_SET);
     cap_set_proc(caps);
     cap_free(caps);
+#elif defined(__unix__)
+    /* If running suid root then we need to setuid before using the force. */
+    setuid( 0 );
+    /* setgid( 0 ); */
 #endif
 
     if(tuntap_open(&(eee.device), tuntap_dev_name, ip_mode, ip_addr, netmask, device_mac, mtu) < 0)
