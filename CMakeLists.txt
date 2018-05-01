@@ -68,6 +68,9 @@ endif(N2N_OPTION_AES)
 
 add_executable(edge edge.c)
 target_link_libraries(edge n2n)
+if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+target_link_libraries(edge cap)
+endif()
 
 add_executable(supernode sn.c)
 target_link_libraries(supernode n2n)
@@ -76,11 +79,11 @@ set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdm
 endif(DEFINED WIN32)
 
 if(NOT DEFINED WIN32)
-add_executable(test test.c)
-target_link_libraries(test n2n)
+#add_executable(test test.c)
+#target_link_libraries(test n2n)
 
-add_executable(benchmark benchmark.c)
-target_link_libraries(benchmark n2n)
+#add_executable(benchmark benchmark.c)
+#target_link_libraries(benchmark n2n)
 endif(NOT DEFINED WIN32)
 
 install(TARGETS edge supernode
