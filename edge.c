@@ -1802,7 +1802,7 @@ static DWORD tunReadThread(LPVOID lpArg )
         readFromTAPSocket(eee);
     }
 
-    return((DWORD)NULL);
+    return 0;
 }
 
 
@@ -2324,7 +2324,7 @@ int main(int argc, char* argv[])
     caps = cap_init();
     cap_set_proc(caps);
     cap_free(caps);
-#elif !defined(_WIN32)
+#elif defined(__unix__)
     if ( (userid != 0) || (groupid != 0 ) ) {
         traceEvent(TRACE_NORMAL, "Interface up. Dropping privileges to uid=%d, gid=%d", 
                    (signed int)userid, (signed int)groupid);

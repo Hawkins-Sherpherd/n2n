@@ -27,8 +27,15 @@
 #include <windows.h>
 #include <winioctl.h>
 #include <ws2ipdef.h>
+
+/* ip helper api */
 #include <iphlpapi.h>
+
+/* for CLSIDFromString */
 #include <objbase.h>
+
+/* for _access */
+#include <io.h>
 
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
@@ -54,8 +61,15 @@ typedef unsigned int u_int32_t;
 typedef unsigned short u_int16_t;
 typedef unsigned char u_int8_t;
 
-typedef int ssize_t;
+#ifdef _WIN64
+typedef __int64 ssize_t;
+#else
+typedef long ssize_t;
+#endif
 #endif /* #ifdef _MSC_VER */
+
+#define access _access
+#define R_OK 4
 
 typedef unsigned long in_addr_t;
 

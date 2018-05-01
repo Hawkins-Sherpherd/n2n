@@ -57,20 +57,9 @@ static ULONG get_adapter_index(PWSTR device_name) {
 }
 
 static DWORD set_dhcp(struct tuntap_dev* device) {
-    IP_INTERFACE_INFO* info;
-    ULONG size;
-
-    // GetInterfaceInfo(NULL, &size);
-    // info = malloc(size);
-    // GetInterfaceInfo(info, &size);
-    // for (LONG i = 0; i < info->NumAdapters; i++) {
-    //     printf("%u %ls\n", info->Adapter[i].Index, info->Adapter[i].Name);
-        
-    // }
-    // free(info);
-
     IP_ADAPTER_INDEX_MAP iface;
     DWORD rc;
+
     iface.Index = device->ifIdx;
     _snwprintf(iface.Name, MAX_ADAPTER_NAME, L"\\DEVICE\\TCPIP_%s", device->device_name);
     rc = IpReleaseAddress(&iface);
@@ -111,7 +100,6 @@ int open_wintap(struct tuntap_dev *device,
     HKEY key, key2;
     LONG rc;
     WCHAR regpath[1024];
-    char cmd[256];
     WCHAR adapterid[1024];
     WCHAR tapname[1024];
     long len;
@@ -123,7 +111,16 @@ int open_wintap(struct tuntap_dev *device,
     device->device_handle = INVALID_HANDLE_VALUE;
     device->device_name = NULL;
     device->ifIdx = NET_IFINDEX_UNSPECIFIED;
-    device->ip_addr = inet_addr(device_ip);
+
+    if (inet_pton(AF_INET, device_ip, &device->ip_addr) != 1) {
+        printf("device ip is not a valid IP address\n");
+        exit(-1);
+    }
+
+    if (inet_pton(AF_INET, device_mask, &device->device_mask) != 1) {
+        printf("net mask is not a valid\n");
+        exit(-1);
+    }
 
     /* Open registry and look for network adapters */
     if((rc = RegOpenKeyEx(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &key))) {
@@ -223,9 +220,7 @@ int open_wintap(struct tuntap_dev *device,
         tuntap_get_address(device);
     }
     else
-    {
-        device->ip_addr = inet_addr(device_ip);
-        device->device_mask = inet_addr(device_mask);
+    {        
         rc = set_static_ip_address(device);
     }
 
