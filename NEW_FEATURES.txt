@@ -4,3 +4,15 @@ Between 2.0.x and 2.1.x
 * Better ming Windows build support.
 * Added -E flag to allow multicast ethernet traffic.
 
+Additions:
+* Windows User Access Control
+* Linux capability awareness
+* Use API on Windows (IPHLPAPI.DLL) and Linux (ioctl) to set IP address
+* AES uses EVP for Hardware acceleration instead of pure software implementation
+
+Future:
+* IPv6 for inner and outer transport
+* NetBSD/FreeBSD (might got broken, was never checked)
+* Other Ciphers
+* Better Documentations
+* Code cleanup

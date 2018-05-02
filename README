@@ -6,13 +6,9 @@ Edge node
 You need to start an edge node on each host you want to connect with the *same*
 community.
 
-0. become root
+# Become root
 
-1. create tun device
-# tunctl -t tun0
-
-3. enable the edge process
-# ./edge -d n2n0 -c mynetwork -k encryptme -u 99 -g 99 -m 3C:A0:12:34:56:78 -a 1.2.3.4 -l a.b.c.d:xyw
+# ./edge -d n2n0 -c mynetwork -u 99 -g 99 -k encryptme -m 3C:A0:12:34:56:78 -a 1.2.3.4 -l a.b.c.d:xyw
  or
 # N2N_KEY=encryptme ./edge -d n2n0 -c mynetwork -u 99 -g 99 -m 3C:A0:12:34:56:78 -a 1.2.3.4 -l a.b.c.d:xyw
 
@@ -49,6 +45,19 @@ done
 Any user can now run edge. You may not want this, but it may be convenient and
 safe if your host has only one login user.
 
+Use net_admin capabilities (LINUX)
+--------------------------
+
+As an more secure alternative to SUID Linux provides the ability to add
+capabilities to an executable. 
+
+This version of edge is capabilties aware and uses the NET_ADMIN capability if it is found
+in its permissive set.
+
+To use this feature set as root the admin capability:
+# setcap cap_net_admin+p ./edge
+
+Edge can now be run as any user that has executive permission for edge.
 
 Running As a Daemon (UNIX)
 -------------------
@@ -63,6 +72,14 @@ If the edge command returns 0 then the daemon started successfully. If it
 returns non-zero then edge failed to start up for some reason. When edge starts
 running as a daemon, all logging goes to syslog daemon.info facility.
 
+Systemd Service (LINUX)
+---------------
+
+Examples for an systemd service file are provided in the systemd/ folder.
+The edge service uses AmbientCapabilities to set the net_admin capability
+to run edge as a dynamically created user.
+
+Systemd requires a Linux Kernel 4.3 or greater for this feature.
 
 IPv6 Support
 ------------
