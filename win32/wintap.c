@@ -57,15 +57,13 @@ static ULONG get_adapter_index(PWSTR device_name) {
 }
 
 static DWORD set_dhcp(struct tuntap_dev* device) {
-    IP_ADAPTER_INDEX_MAP iface;
     NET_LUID luid;
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
     WCHAR windows_path[256];
     WCHAR cmd[256];
     WCHAR netsh[1024];
-    PROCESS_INFORMATION pi = {0};
-    STARTUPINFO si = {0};
     DWORD rc;
+    SHELLEXECUTEINFO shex;
 
     ConvertInterfaceIndexToLuid(device->ifIdx, &luid);
     ConvertInterfaceLuidToNameW(&luid, if_name, MAX_ADAPTER_NAME_LENGTH);
@@ -73,28 +71,23 @@ static DWORD set_dhcp(struct tuntap_dev* device) {
 
     _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
     _snwprintf(netsh, 1024, L"netsh interface ipv4 set address %s dhcp", if_name);
+    memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
 
-    si.cb = sizeof(STARTUPINFO);
-    CreateProcess( cmd, netsh, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi );
-    WaitForSingleObject(pi.hProcess, 100);
-    GetExitCodeProcess(pi.hProcess, &rc);
-    //printf("rc=%u\n",rc);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
+    shex.cbSize       = sizeof( SHELLEXECUTEINFO );
+    shex.fMask        = 0;
+    shex.lpVerb       = L"runas";
+    shex.lpFile       = cmd;
+    shex.lpParameters = netsh;
 
-    iface.Index = device->ifIdx;
-    _snwprintf(iface.Name, MAX_ADAPTER_NAME, L"\\DEVICE\\TCPIP_%s", device->device_name);
-    rc = IpReleaseAddress(&iface);
-    //printf("rc=%u\n",rc);
-    rc = IpRenewAddress(&iface);
-    //printf("rc=%u\n",rc);
-    
-    // print_windows_message(rc);
+    rc = ShellExecuteEx(&shex);
 
-    return rc;
+    // print_windows_message(GetLastError());
+
+    return 0;
 }
 
 static DWORD set_static_ip_address(struct tuntap_dev* device) {
+#if 0
     ULONG NTEContext, NTEInstance;
     DWORD rc;
     rc = AddIPAddress(
@@ -103,7 +96,6 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
         device->ifIdx, &NTEContext, &NTEInstance
     );
 
-
     switch (rc) {
         /* ip already set */
         case ERROR_OBJECT_ALREADY_EXISTS:
@@ -111,11 +103,42 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
         default:
             return rc;
     }
+#endif
+    NET_LUID luid;
+    WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
+    WCHAR windows_path[256];
+    WCHAR cmd[256];
+    WCHAR netsh[1024];
+    char ip[16], mask[16];
+    SHELLEXECUTEINFO shex;
+    DWORD rc;
+
+    ConvertInterfaceIndexToLuid(device->ifIdx, &luid);
+    ConvertInterfaceLuidToNameW(&luid, if_name, MAX_ADAPTER_NAME_LENGTH);
+    GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
+    inet_ntop(AF_INET, &device->ip_addr, ip, 16);
+    inet_ntop(AF_INET, &device->device_mask, mask, 16);
+
+    _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
+    _snwprintf(netsh, 1024, L"netsh interface ip set address %s static %hs %hs", if_name, ip, mask);
+    memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
+
+    shex.cbSize       = sizeof( SHELLEXECUTEINFO );
+    shex.fMask        = SEE_MASK_NO_CONSOLE | SEE_MASK_NOASYNC;
+    shex.lpVerb       = L"runas";
+    shex.lpFile       = cmd;
+    shex.lpParameters = netsh;
+
+    rc = ShellExecuteEx(&shex);
+
+    // print_windows_message(GetLastError());
+
+    return 0;
 }
 
 int open_wintap(struct tuntap_dev *device,
                 const char * address_mode, /* "static" or "dhcp" */
-                char *device_ip, 
+                char *device_ip,
                 char *device_mask,
                 const char *device_mac, 
                 int mtu) {
