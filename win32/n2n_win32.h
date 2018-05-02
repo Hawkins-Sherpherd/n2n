@@ -7,13 +7,13 @@
 #ifndef _N2N_WIN32_H_
 #define _N2N_WIN32_H_
 
-#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#define _CRT_NONSTDC_NO_DEPRECATE
 
+/* use our own definition for min/max */
+#define NOMINMAX
+
+/* use windows unicode API */
 #define UNICODE
 #define _UNICODE
 
@@ -27,6 +27,7 @@
 #include <windows.h>
 #include <winioctl.h>
 #include <ws2ipdef.h>
+#include <ws2tcpip.h>
 
 /* ip helper api */
 #include <iphlpapi.h>
@@ -46,20 +47,9 @@
 
 #include "wintap.h"
 
+#include <stdint.h>
 #ifdef _MSC_VER
 #include "getopt.h"
-
-/* Other Win environments are expected to support stdint.h */
-
-/* stdint.h typedefs (C99) (not present in Visual Studio) */
-typedef unsigned int uint32_t;
-typedef unsigned short uint16_t;
-typedef unsigned char uint8_t;
-
-/* sys/types.h typedefs (not present in Visual Studio) */
-typedef unsigned int u_int32_t;
-typedef unsigned short u_int16_t;
-typedef unsigned char u_int8_t;
 
 #ifdef _WIN64
 typedef __int64 ssize_t;
@@ -73,16 +63,12 @@ typedef long ssize_t;
 
 typedef unsigned long in_addr_t;
 
-
 #ifdef EAFNOSUPPORT
 #undef EAFNOSUPPORT
 #endif
 #define EAFNOSUPPORT   WSAEAFNOSUPPORT
 #define MAX(a,b) (a > b ? a : b)
 #define MIN(a,b) (a < b ? a : b)
-
-#define snprintf _snprintf
-#define strdup _strdup
 
 #define socklen_t int
 

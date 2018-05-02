@@ -89,13 +89,13 @@ static size_t tf_choose_tx_sa( transop_tf_t * priv )
  *  [V|SSSS|nnnnDDDDDDDDDDDDDDDDDDDDD]
  *         |<------ encrypted ------>|
  */
-static int transop_encode_twofish( n2n_trans_op_t * arg,
+static ssize_t transop_encode_twofish( n2n_trans_op_t * arg,
                                    uint8_t * outbuf,
                                    size_t out_len,
                                    const uint8_t * inbuf,
                                    size_t in_len )
 {
-    int len=-1;
+    ssize_t len=-1;
     transop_tf_t * priv = (transop_tf_t *)arg->priv;
     uint8_t assembly[N2N_PKT_BUF_SIZE];
     uint32_t * pnonce;
@@ -189,13 +189,13 @@ static ssize_t twofish_find_sa( const transop_tf_t * priv, const n2n_sa_t req_id
  *  [V|SSSS|nnnnDDDDDDDDDDDDDDDDDDDDD]
  *         |<------ encrypted ------>|
  */
-static int transop_decode_twofish( n2n_trans_op_t * arg,
+static ssize_t transop_decode_twofish( n2n_trans_op_t * arg,
                                    uint8_t * outbuf,
                                    size_t out_len,
                                    const uint8_t * inbuf,
                                    size_t in_len )
 {
-    int len=0;
+    size_t len=0;
     transop_tf_t * priv = (transop_tf_t *)arg->priv;
     uint8_t assembly[N2N_PKT_BUF_SIZE];
 
@@ -368,7 +368,7 @@ static n2n_tostat_t transop_tick_twofish( n2n_trans_op_t * arg, time_t now )
 int transop_twofish_setup( n2n_trans_op_t * ttt, 
                            n2n_sa_t sa_num,
                            uint8_t * encrypt_pwd, 
-                           uint32_t encrypt_pwd_len )
+                           uint64_t encrypt_pwd_len )
 {
     int retval = 1;
     transop_tf_t * priv = NULL;

@@ -24,33 +24,23 @@
 #ifndef _N2N_H_
 #define _N2N_H_
 
-/*
-   tunctl -t tun0
-   tunctl -t tun1
-   ifconfig tun0 1.2.3.4 up
-   ifconfig tun1 1.2.3.5 up
-   ./edge -d tun0 -l 2000 -r 127.0.0.1:3000 -c hello
-   ./edge -d tun1 -l 3000 -r 127.0.0.1:2000 -c hello
-
-
-   tunctl -u UID -t tunX
-*/
-
 #if defined(__APPLE__) && defined(__MACH__)
 #define _DARWIN_
 #endif
 
-
-/* Some capability defaults which can be reset for particular platforms. */
-#define N2N_HAVE_DAEMON 1
-#define N2N_HAVE_SETUID 1
-/* #define N2N_CAN_NAME_IFACE */
-
 /* Moved here to define _CRT_SECURE_NO_WARNINGS before all the including takes place */
-#ifdef _WIN32
+#if defined(_WIN32)
 #include "win32/n2n_win32.h"
 #undef N2N_HAVE_DAEMON
 #undef N2N_HAVE_SETUID
+#else
+/* Some capability defaults which can be reset for particular platforms. */
+#define N2N_HAVE_DAEMON 1
+#define N2N_HAVE_SETUID 1
+#ifdef __linux__
+#define N2N_CAN_NAME_IFACE 1
+#define N2N_HAS_CAPABILITIES 1
+#endif
 #endif
 
 #include <time.h>
@@ -82,7 +72,6 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <linux/prctl.h>
-#define N2N_CAN_NAME_IFACE 1
 #endif /* #ifdef __linux__ */
 
 #ifdef __FreeBSD__
@@ -222,8 +211,8 @@ extern const uint8_t multicast_addr[6];
 extern void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...);
 extern int  tuntap_open(tuntap_dev *device, char *dev, const char *address_mode, char *device_ip, 
 			char *device_mask, const char * device_mac, int mtu);
-extern int  tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, int len);
-extern int  tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, int len);
+extern ssize_t  tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
+extern ssize_t  tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
 extern void tuntap_close(struct tuntap_dev *tuntap);
 extern void tuntap_get_address(struct tuntap_dev *tuntap);
 

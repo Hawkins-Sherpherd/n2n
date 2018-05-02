@@ -9,13 +9,13 @@ static int transop_deinit_null( n2n_trans_op_t * arg )
     return 0;
 }
 
-static int transop_encode_null( n2n_trans_op_t * arg,
+static ssize_t transop_encode_null( n2n_trans_op_t * arg,
                                 uint8_t * outbuf,
                                 size_t out_len,
                                 const uint8_t * inbuf,
                                 size_t in_len )
 {
-    int retval = -1;
+    ssize_t retval = -1;
 
     traceEvent( TRACE_DEBUG, "encode_null %lu", in_len );
     if ( out_len >= in_len )
@@ -31,13 +31,13 @@ static int transop_encode_null( n2n_trans_op_t * arg,
     return retval;
 }
 
-static int transop_decode_null( n2n_trans_op_t * arg,
+static ssize_t transop_decode_null( n2n_trans_op_t * arg,
                                 uint8_t * outbuf,
                                 size_t out_len,
                                 const uint8_t * inbuf,
                                 size_t in_len )
 {
-    int retval = -1;
+    ssize_t retval = -1;
 
     traceEvent( TRACE_DEBUG, "decode_null %lu", in_len );
     if ( out_len >= in_len )

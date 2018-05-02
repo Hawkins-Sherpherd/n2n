@@ -36,7 +36,7 @@ typedef int             (*n2n_transaddspec_f)( n2n_trans_op_t * arg,
 typedef n2n_tostat_t    (*n2n_transtick_f)( n2n_trans_op_t * arg, 
                                             time_t now );
 
-typedef int             (*n2n_transform_f)( n2n_trans_op_t * arg,
+typedef ssize_t         (*n2n_transform_f)( n2n_trans_op_t * arg,
                                             uint8_t * outbuf,
                                             size_t out_len,
                                             const uint8_t * inbuf,
@@ -67,7 +67,7 @@ struct n2n_trans_op
 int transop_twofish_setup( n2n_trans_op_t * ttt, 
                            n2n_sa_t sa_num,
                            uint8_t * encrypt_pwd, 
-                           uint32_t encrypt_pwd_len );
+                           uint64_t encrypt_pwd_len );
 
 /* Initialise an empty transop ready to receive cipherspec elements. */
 int  transop_twofish_init( n2n_trans_op_t * ttt );

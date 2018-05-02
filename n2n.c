@@ -86,7 +86,7 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
     char *extra_msg = "";
     time_t theTime = time(NULL);
 #ifdef _WIN32
-	int i;
+	size_t i;
 #endif
 
     /* We have two paths - one if we're logging, one if we aren't

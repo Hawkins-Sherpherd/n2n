@@ -36,8 +36,8 @@ struct n2n_sn
     sn_stats_t          stats;
     int                 daemon;         /* If non-zero then daemonise. */
     uint16_t            lport;          /* Local UDP port to bind to. */
-    int                 sock;           /* Main socket for UDP traffic with edges. */
-    int                 mgmt_sock;      /* management socket. */
+    SOCKET              sock;           /* Main socket for UDP traffic with edges. */
+    SOCKET              mgmt_sock;      /* management socket. */
     struct peer_info *  edges;          /* Link list of registered edges. */
 };
 
@@ -222,7 +222,7 @@ static int try_forward( n2n_sn_t * sss,
 
     if ( NULL != scan )
     {
-        int data_sent_len;
+        ssize_t data_sent_len;
         data_sent_len = sendto_sock( sss, &(scan->sock), pktbuf, pktsize );
 
         if ( data_sent_len == pktsize )
@@ -278,7 +278,7 @@ static int try_broadcast( n2n_sn_t * sss,
             && (0 != memcmp(srcMac, scan->mac_addr, sizeof(n2n_mac_t)) ) )
             /* REVISIT: exclude if the destination socket is where the packet came from. */
         {
-            int data_sent_len;
+            ssize_t data_sent_len;
           
             data_sent_len = sendto_sock(sss, &(scan->sock), pktbuf, pktsize);
 
@@ -324,7 +324,7 @@ static int process_mgmt( n2n_sn_t * sss,
                          "----------------\n" );
 
     ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
-                         "uptime    %lu\n", (now - sss->start_time) );
+                         "uptime    %lu\n", (long) (now - sss->start_time) );
 
     ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
                          "edges     %u\n", 
@@ -720,7 +720,7 @@ static int run_loop( n2n_sn_t * sss )
         time_t now=0;
 
         FD_ZERO(&socket_mask);
-        max_sock = MAX(sss->sock, sss->mgmt_sock);
+        max_sock = (int) MAX(sss->sock, sss->mgmt_sock);
 
         FD_SET(sss->sock, &socket_mask);
         FD_SET(sss->mgmt_sock, &socket_mask);

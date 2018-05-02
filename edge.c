@@ -100,8 +100,8 @@ struct n2n_edge
     char                keyschedule[N2N_PATHNAME_MAXLEN];
     int                 null_transop;           /**< Only allowed if no key sources defined. */
 
-    int                 udp_sock;
-    int                 udp_mgmt_sock;          /**< socket for status info. */
+    SOCKET              udp_sock;
+    SOCKET              udp_mgmt_sock;          /**< socket for status info. */
 
     tuntap_dev          device;                 /**< All about the TUNTAP device */
     int                 dyn_ip_mode;            /**< Interface IP address is dynamically allocated, eg. DHCP. */
@@ -314,7 +314,7 @@ static int edge_init(n2n_edge_t * eee)
 
 
 /* Called in main() after options are parsed. */
-static int edge_init_twofish( n2n_edge_t * eee, uint8_t *encrypt_pwd, uint32_t encrypt_pwd_len )
+static int edge_init_twofish( n2n_edge_t * eee, uint8_t *encrypt_pwd, uint64_t encrypt_pwd_len )
 {
     return transop_twofish_setup( &(eee->transop[N2N_TRANSOP_TF_IDX]), 0, encrypt_pwd, encrypt_pwd_len );
 }
@@ -526,7 +526,7 @@ static void help() {
 
 
 /** Send a datagram to a socket defined by a n2n_sock_t */
-static ssize_t sendto_sock( int fd, const void * buf, size_t len, const n2n_sock_t * dest )
+static ssize_t sendto_sock( SOCKET fd, const void * buf, size_t len, const n2n_sock_t * dest )
 {
     struct sockaddr_in peer_addr;
     ssize_t sent;
@@ -1013,12 +1013,12 @@ static void send_grat_arps(n2n_edge_t * eee,) {
  */
 static void update_supernode_reg( n2n_edge_t * eee, time_t nowTime )
 {
-    if ( eee->sn_wait && ( nowTime > (eee->last_register_req + (eee->register_lifetime/10) ) ) )
+    if ( eee->sn_wait && ( nowTime > (time_t) (eee->last_register_req + (eee->register_lifetime/10) ) ) )
     {
         /* fall through */
         traceEvent( TRACE_DEBUG, "update_supernode_reg: doing fast retry." );
     }
-    else if ( nowTime < (eee->last_register_req + eee->register_lifetime))
+    else if ( nowTime < (time_t) (eee->last_register_req + eee->register_lifetime))
     {
         return; /* Too early */
     }
@@ -1877,7 +1877,7 @@ static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn)
             ainfo = NULL;
         } else {
             traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s, assuming numeric", supernode_host);
-            sn_addr = inet_addr(supernode_host); /* uint32_t */
+            inet_pton(AF_INET, supernode_host, &sn_addr); 
             memcpy( sn->addr.v4, &(sn_addr), IPV4_SIZE );
             sn->family=AF_INET;
         }
@@ -1967,6 +1967,11 @@ int main(int argc, char* argv[])
     uid_t   userid=0; /* root is the only guaranteed ID */
     gid_t   groupid=0; /* root is the only guaranteed ID */
 #endif
+#ifdef N2N_HAS_CAPABILITIES
+    cap_t caps, caps_original;
+    cap_value_t caps_array[] = { CAP_NET_ADMIN, CAP_SETUID, CAP_SETGID };
+    cap_flag_value_t is_flag_set;
+#endif
 
     char    device_mac[N2N_MACNAMSIZ]="";
     char *  encrypt_key=NULL;
@@ -1977,11 +1982,7 @@ int main(int argc, char* argv[])
 
     n2n_edge_t eee; /* single instance for this program */
 
-#ifdef __linux__
-    cap_t caps, caps_original;
-    cap_value_t caps_array[] = { CAP_NET_ADMIN, CAP_SETUID, CAP_SETGID };
-    cap_flag_value_t is_flag_set;
-    
+#ifdef N2N_HAS_CAPABILITIES    
     caps_original = cap_get_proc();
     /* drop all capabilities, permit some for later */
     caps = cap_init();
@@ -1997,6 +1998,7 @@ int main(int argc, char* argv[])
     cap_free(caps);
     cap_free(caps_original);
 #endif
+
     if (-1 == edge_init(&eee) )
     {
         traceEvent( TRACE_ERROR, "Failed in edge_init" );
@@ -2219,7 +2221,7 @@ int main(int argc, char* argv[])
         } /* end switch */
     }
 
-#ifdef __linux__
+#ifdef N2N_HAS_CAPABILITIES
     /* set effective capability to set uid/gid */
     caps = cap_init();
     cap_set_flag(caps, CAP_PERMITTED, 3, caps_array, CAP_SET);
@@ -2273,7 +2275,7 @@ int main(int argc, char* argv[])
     effectiveargc = 0;
 
     if(!(
-#ifdef __linux__
+#ifdef N2N_CAN_NAME_IFACE
            (tuntap_dev_name[0] != 0) &&
 #endif
            (eee.community_name[0] != 0) &&
@@ -2302,14 +2304,14 @@ int main(int argc, char* argv[])
         traceEvent(TRACE_NORMAL, "ip_mode='%s'", ip_mode);        
     }
 
-#if defined(__linux__)
+#if defined(N2N_HAS_CAPABILITIES)
     /* set effective capabilitiy NET_ADMIN */
     caps = cap_init();
     cap_set_flag(caps, CAP_EFFECTIVE, 1, caps_array, CAP_SET);
     cap_set_flag(caps, CAP_PERMITTED, 1, caps_array, CAP_SET);
     cap_set_proc(caps);
     cap_free(caps);
-#elif defined(__unix__)
+#elif !defined(_WIN32)
     /* If running suid root then we need to setuid before using the force. */
     setuid( 0 );
     /* setgid( 0 ); */
@@ -2318,13 +2320,13 @@ int main(int argc, char* argv[])
     if(tuntap_open(&(eee.device), tuntap_dev_name, ip_mode, ip_addr, netmask, device_mac, mtu) < 0)
         return(-1);
 
-#if defined(__linux__)
+#if defined(N2N_HAS_CAPABILITIES)
     /* drop capabilities */
     prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L);
     caps = cap_init();
     cap_set_proc(caps);
     cap_free(caps);
-#elif defined(__unix__)
+#elif !defined(_WIN32)
     if ( (userid != 0) || (groupid != 0 ) ) {
         traceEvent(TRACE_NORMAL, "Interface up. Dropping privileges to uid=%d, gid=%d", 
                    (signed int)userid, (signed int)groupid);
@@ -2407,7 +2409,7 @@ static int run_loop(n2n_edge_t * eee )
         FD_ZERO(&socket_mask);
         FD_SET(eee->udp_sock, &socket_mask);
         FD_SET(eee->udp_mgmt_sock, &socket_mask);
-        max_sock = max( eee->udp_sock, eee->udp_mgmt_sock );
+        max_sock = (int) max( eee->udp_sock, eee->udp_mgmt_sock );
 #ifndef _WIN32
         FD_SET(eee->device.fd, &socket_mask);
         max_sock = max( max_sock, eee->device.fd );

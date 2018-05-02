@@ -49,10 +49,7 @@
 #include "win32/n2n_win32.h"
 #endif
 
-#ifndef _MSC_VER
-/* Not shipped with Visual Studio (as stated by the stdint.h wikipedia page) */
 #include <stdint.h> /* defines uintN_t types */
-#endif
 
 #ifdef __sun__ /* Should be HAVE_SYS_TYPES */
 /* The following are redefinitions if sys/types.h has been included too.*/
@@ -146,7 +143,7 @@ extern bool TwoFish_srand;			/* if set to TRUE (default), first call of TwoFishI
  *  Output:	Pointer to TWOFISH structure. This data structure contains key dependent data.
  *			This pointer is used with all other crypt functions.
  */
-TWOFISH *TwoFishInit(const uint8_t *userkey, uint32_t keysize );
+TWOFISH *TwoFishInit(const uint8_t *userkey, uint64_t keysize );
 
 
 /*	TwoFish Destroy
@@ -169,7 +166,7 @@ void TwoFishDestroy(TWOFISH *tfdata);
  *
  *	Output:	Returns a pointer to the memory allocated.
  */
-void *TwoFishAlloc(uint32_t len,bool binhex,bool decrypt,TWOFISH *tfdata);
+void *TwoFishAlloc(uint64_t len,bool binhex,bool decrypt,TWOFISH *tfdata);
 
 
 /*	TwoFish Free
@@ -207,7 +204,7 @@ void TwoFishSetOutput(uint8_t *outp,TWOFISH *tfdata);
  *
  *	Output:	The amount of bytes encrypted if successful, otherwise 0.
  */
-uint32_t TwoFishEncryptRaw(uint8_t *in,uint8_t *out,uint32_t len,TWOFISH *tfdata);
+uint64_t TwoFishEncryptRaw(uint8_t *in,uint8_t *out,uint64_t len,TWOFISH *tfdata);
 
 /*	TwoFish Raw Decryption 
  *	
@@ -220,7 +217,7 @@ uint32_t TwoFishEncryptRaw(uint8_t *in,uint8_t *out,uint32_t len,TWOFISH *tfdata
  *
  *	Output:	The amount of bytes decrypted if successful, otherwise 0.
  */
-uint32_t TwoFishDecryptRaw(uint8_t *in,uint8_t *out,uint32_t len,TWOFISH *tfdata);
+uint64_t TwoFishDecryptRaw(uint8_t *in,uint8_t *out,uint64_t len,TWOFISH *tfdata);
 
 
 /*	TwoFish Encryption 
@@ -242,7 +239,7 @@ uint32_t TwoFishDecryptRaw(uint8_t *in,uint8_t *out,uint32_t len,TWOFISH *tfdata
  *
  *	Output:	The amount of bytes encrypted if successful, otherwise 0.
  */
-uint32_t TwoFishEncrypt(uint8_t *in,uint8_t **out,signed long len,bool binhex,TWOFISH *tfdata);
+uint64_t TwoFishEncrypt(uint8_t *in,uint8_t **out,uint64_t len,bool binhex,TWOFISH *tfdata);
 
 
 /*	TwoFish Decryption 
@@ -264,23 +261,23 @@ uint32_t TwoFishEncrypt(uint8_t *in,uint8_t **out,signed long len,bool binhex,TW
  *
  *	Output:	The amount of bytes decrypted if successful, otherwise 0.
  */
-uint32_t TwoFishDecrypt(uint8_t *in,uint8_t **out,signed long len,bool binhex,TWOFISH *tfdata);
+uint64_t TwoFishDecrypt(uint8_t *in,uint8_t **out,uint64_t len,bool binhex,TWOFISH *tfdata);
 
 
 /**** Private Functions ****/
 
 uint8_t TwoFish__b(uint32_t x,int n);
-void _TwoFish_BinHex(uint8_t *buf,uint32_t len,bool bintohex);
-uint32_t _TwoFish_CryptRawCBC(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,TWOFISH *tfdata);
-uint32_t _TwoFish_CryptRaw16(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,TWOFISH *tfdata);
-uint32_t _TwoFish_CryptRaw(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,TWOFISH *tfdata);
+void _TwoFish_BinHex(uint8_t *buf,uint64_t len,bool bintohex);
+uint64_t _TwoFish_CryptRawCBC(uint8_t *in,uint8_t *out,uint64_t len,bool decrypt,TWOFISH *tfdata);
+uint64_t _TwoFish_CryptRaw16(uint8_t *in,uint8_t *out,uint64_t len,bool decrypt,TWOFISH *tfdata);
+uint64_t _TwoFish_CryptRaw(uint8_t *in,uint8_t *out,uint64_t len,bool decrypt,TWOFISH *tfdata);
 void _TwoFish_PrecomputeMDSmatrix(void);	
 void _TwoFish_MakeSubKeys(TWOFISH *tfdata);	
 void _TwoFish_qBlockPush(uint8_t *p,uint8_t *c,TWOFISH *tfdata);
 void _TwoFish_qBlockPop(uint8_t *p,uint8_t *c,TWOFISH *tfdata);
 void _TwoFish_ResetCBC(TWOFISH *tfdata);
-void _TwoFish_FlushOutput(uint8_t *b,uint32_t len,TWOFISH *tfdata);
-void _TwoFish_BlockCrypt(uint8_t *in,uint8_t *out,uint32_t size,int decrypt,TWOFISH *tfdata);
+void _TwoFish_FlushOutput(uint8_t *b,uint64_t len,TWOFISH *tfdata);
+void _TwoFish_BlockCrypt(uint8_t *in,uint8_t *out,uint64_t size,int decrypt,TWOFISH *tfdata);
 void _TwoFish_BlockCrypt16(uint8_t *in,uint8_t *out,bool decrypt,TWOFISH *tfdata);
 uint32_t _TwoFish_RS_MDS_Encode(uint32_t k0,uint32_t k1);
 uint32_t _TwoFish_F32(uint32_t k64Cnt,uint32_t x,uint32_t *k32);

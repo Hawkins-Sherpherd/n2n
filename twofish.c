@@ -138,9 +138,10 @@ uint8_t TwoFish__b(uint32_t x,int n)
  *		This pointer is used with all other crypt functions.
  */
 
-TWOFISH *TwoFishInit(const uint8_t *userkey, uint32_t keysize)
+TWOFISH *TwoFishInit(const uint8_t *userkey, uint64_t keysize)
 {  TWOFISH *tfdata;
-  int i,x,m;
+  int i;
+  uint64_t x,m;
   uint8_t tkey[TwoFish_KEY_LENGTH+40];
 
   memset( tkey, 0, TwoFish_KEY_LENGTH+40 );
@@ -191,8 +192,8 @@ void TwoFishDestroy(TWOFISH *tfdata)
 
 
 /* en/decryption with CBC mode */
-uint32_t _TwoFish_CryptRawCBC(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,TWOFISH *tfdata)
-{	uint32_t rl;
+uint64_t _TwoFish_CryptRawCBC(uint8_t *in,uint8_t *out,uint64_t len,bool decrypt,TWOFISH *tfdata)
+{	uint64_t rl;
 
   rl=len;											/* remember how much data to crypt. */
   while(len>TwoFish_BLOCK_SIZE)					/* and now we process block by block. */
@@ -210,7 +211,7 @@ uint32_t _TwoFish_CryptRawCBC(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt
 }
 
 /* en/decryption on one block only */
-uint32_t _TwoFish_CryptRaw16(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,TWOFISH *tfdata)
+uint64_t _TwoFish_CryptRaw16(uint8_t *in,uint8_t *out,uint64_t len,bool decrypt,TWOFISH *tfdata)
 {	/* qBlockPlain already zero'ed through ResetCBC  */
   memcpy(tfdata->qBlockPlain,in,len);					/* toss the data into it. */
   _TwoFish_BlockCrypt16(tfdata->qBlockPlain,tfdata->qBlockCrypt,decrypt,tfdata); /* encrypt just that block without CBC. */
@@ -219,7 +220,7 @@ uint32_t _TwoFish_CryptRaw16(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,
 }
 
 /* en/decryption without reset of CBC and output assignment */
-uint32_t _TwoFish_CryptRaw(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,TWOFISH *tfdata)
+uint64_t _TwoFish_CryptRaw(uint8_t *in,uint8_t *out,uint64_t len,bool decrypt,TWOFISH *tfdata)
 {
   if(in!=NULL && out!=NULL && len>0 && tfdata!=NULL)		/* if we have valid data, then... */
     {	if(len>TwoFish_BLOCK_SIZE)							/* ...check if we have more than one block. */
@@ -243,9 +244,9 @@ uint32_t _TwoFish_CryptRaw(uint8_t *in,uint8_t *out,uint32_t len,bool decrypt,TW
  *	Output:	The amount of bytes encrypted if successful, otherwise 0.
  */
 
-uint32_t TwoFishEncryptRaw(uint8_t *in,
+uint64_t TwoFishEncryptRaw(uint8_t *in,
 			    uint8_t *out,
-			    uint32_t len,
+			    uint64_t len,
 			    TWOFISH *tfdata)
 {	_TwoFish_ResetCBC(tfdata);							/* reset CBC flag. */
   tfdata->output=out;							/* output straight into output buffer. */
@@ -264,9 +265,9 @@ uint32_t TwoFishEncryptRaw(uint8_t *in,
  *	Output:	The amount of bytes decrypted if successful, otherwise 0.
  */
 
-uint32_t TwoFishDecryptRaw(uint8_t *in,
+uint64_t TwoFishDecryptRaw(uint8_t *in,
 			    uint8_t *out,
-			    uint32_t len,
+			    uint64_t len,
 			    TWOFISH *tfdata)
 {	_TwoFish_ResetCBC(tfdata);							/* reset CBC flag. */
   tfdata->output=out;							/* output straight into output buffer. */
@@ -315,7 +316,7 @@ void TwoFishSetOutput(uint8_t *outp,TWOFISH *tfdata)
  *	Output:	Returns a pointer to the memory allocated.
  */
 
-void *TwoFishAlloc(uint32_t len,bool binhex,bool decrypt,TWOFISH *tfdata)
+void *TwoFishAlloc(uint64_t len,bool binhex,bool decrypt,TWOFISH *tfdata)
 {
   /*	TwoFishFree(tfdata);	*/			/* (don't for now) discard whatever was allocated earlier. */
   if(decrypt)							/* if decrypting... */
@@ -334,7 +335,7 @@ void *TwoFishAlloc(uint32_t len,bool binhex,bool decrypt,TWOFISH *tfdata)
 }
 
 /* bin2hex and hex2bin conversion */
-void _TwoFish_BinHex(uint8_t *buf,uint32_t len,bool bintohex)
+void _TwoFish_BinHex(uint8_t *buf,uint64_t len,bool bintohex)
 {	uint8_t *pi,*po,c;
 
   if(bintohex)
@@ -391,12 +392,12 @@ void _TwoFish_BinHex(uint8_t *buf,uint32_t len,bool bintohex)
  *	Output:	The amount of bytes encrypted if successful, otherwise 0.
  */
 
-uint32_t TwoFishEncrypt(uint8_t *in,
+uint64_t TwoFishEncrypt(uint8_t *in,
 			 uint8_t **out,
-			 signed long len,
+			 uint64_t len,
 			 bool binhex,
 			 TWOFISH *tfdata)
-{	uint32_t ilen,olen;
+{	uint64_t ilen,olen;
 
 
 #if 0
@@ -455,12 +456,12 @@ uint32_t TwoFishEncrypt(uint8_t *in,
  *	Output:	The amount of bytes decrypted if successful, otherwise 0.
  */
 
-uint32_t TwoFishDecrypt(uint8_t *in,
+uint64_t TwoFishDecrypt(uint8_t *in,
 			 uint8_t **out,
-			 signed long len,
+			 uint64_t len,
 			 bool binhex,
 			 TWOFISH *tfdata)
-{	uint32_t ilen,elen,olen;
+{	uint64_t ilen,elen,olen;
   const uint8_t cmagic[TwoFish_MAGIC_LEN]=TwoFish_MAGIC;
   uint8_t *tbuf;
 
@@ -667,7 +668,7 @@ void _TwoFish_MakeSubKeys(TWOFISH *tfdata)	/* Expand a user-supplied key materia
  * @param tfdata: Pointer to the global data structure containing session keys.
  * @return none
  */
-void _TwoFish_BlockCrypt(uint8_t *in,uint8_t *out,uint32_t size,int decrypt,TWOFISH *tfdata)
+void _TwoFish_BlockCrypt(uint8_t *in,uint8_t *out,uint64_t size,int decrypt,TWOFISH *tfdata)
 {	uint8_t PnMinusOne[TwoFish_BLOCK_SIZE];
   uint8_t CnMinusOne[TwoFish_BLOCK_SIZE];
   uint8_t CBCplusCprime[TwoFish_BLOCK_SIZE];
@@ -773,7 +774,7 @@ void _TwoFish_ResetCBC(TWOFISH *tfdata)
   memset(tfdata->qBlockPlain,0,TwoFish_BLOCK_SIZE);
 }
 
-void _TwoFish_FlushOutput(uint8_t *b,uint32_t len,TWOFISH *tfdata)
+void _TwoFish_FlushOutput(uint8_t *b,uint64_t len,TWOFISH *tfdata)
 {	uint32_t i;
 
   for(i=0;i<len && !tfdata->dontflush;i++)

@@ -56,7 +56,7 @@ add_library(n2n n2n.c
 if(DEFINED WIN32)
 add_subdirectory(win32)
 target_link_libraries(n2n n2n_win32)
-
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477" )
 endif(DEFINED WIN32)
 
 if(N2N_OPTION_AES)

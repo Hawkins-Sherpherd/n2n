@@ -219,11 +219,11 @@ int tuntap_open(tuntap_dev *device,
     return(device->fd);
 }
 
-int tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, int len) {
+ssize_t tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) {
     return(read(tuntap->fd, buf, len));
 }
 
-int tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, int len) {
+ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) {
     return(write(tuntap->fd, buf, len));
 }
 

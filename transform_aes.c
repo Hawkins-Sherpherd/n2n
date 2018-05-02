@@ -123,13 +123,13 @@ static const EVP_CIPHER* aes_best_keysize(size_t numBytes)
  *  [V|SSSS|nnnnDDDDDDDDDDDDDDDDDDDDD]
  *         |<------ encrypted ------>|
  */
-static int transop_encode_aes( n2n_trans_op_t * arg,
+static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
                                    uint8_t * outbuf,
                                    size_t out_len,
                                    const uint8_t * inbuf,
                                    size_t in_len )
 {
-    int len2=-1;
+    ssize_t len2=-1;
     transop_aes_t * priv = (transop_aes_t *)arg->priv;
     uint8_t assembly[N2N_PKT_BUF_SIZE];
     uint32_t * pnonce;
@@ -228,13 +228,13 @@ static ssize_t aes_find_sa( const transop_aes_t * priv, const n2n_sa_t req_id )
  *  [V|SSSS|nnnnDDDDDDDDDDDDDDDDDDDDD]
  *         |<------ encrypted ------>|
  */
-static int transop_decode_aes( n2n_trans_op_t * arg,
+static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
                                    uint8_t * outbuf,
                                    size_t out_len,
                                    const uint8_t * inbuf,
                                    size_t in_len )
 {
-    int len=0;
+    ssize_t len=0;
     //int len2 = 0;
     transop_aes_t * priv = (transop_aes_t *)arg->priv;
     uint8_t assembly[N2N_PKT_BUF_SIZE];
@@ -512,7 +512,7 @@ static int transop_deinit_aes( n2n_trans_op_t * arg )
     return 0;
 }
 
-static int transop_encode_aes( n2n_trans_op_t * arg,
+static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
                                    uint8_t * outbuf,
                                    size_t out_len,
                                    const uint8_t * inbuf,
@@ -521,7 +521,7 @@ static int transop_encode_aes( n2n_trans_op_t * arg,
     return -1;
 }
 
-static int transop_decode_aes( n2n_trans_op_t * arg,
+static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
                                    uint8_t * outbuf,
                                    size_t out_len,
                                    const uint8_t * inbuf,

@@ -5,16 +5,6 @@
 #ifndef _WINTAP_H_
 #define _WINTAP_H_
 
-#define UNICODE
-#define _UNICODE
-#define _CRT_SECURE_NO_WARNINGS
-
-#include <ws2tcpip.h>
-#include <stdio.h>
-#include <string.h>
-
-
-
 //===============================================
 // This file is included both by OpenVPN and
 // the TAP-Win32 driver and contains definitions

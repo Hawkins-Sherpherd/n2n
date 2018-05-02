@@ -13,7 +13,7 @@
 #include "n2n_wire.h"
 #include <string.h>
 
-int encode_uint8( uint8_t * base, 
+size_t encode_uint8( uint8_t * base, 
                   size_t * idx,
                   const uint8_t v )
 {
@@ -22,7 +22,7 @@ int encode_uint8( uint8_t * base,
     return 1;
 }
 
-int decode_uint8( uint8_t * out,
+size_t decode_uint8( uint8_t * out,
                   const uint8_t * base,
                   size_t * rem,
                   size_t * idx )
@@ -35,7 +35,7 @@ int decode_uint8( uint8_t * out,
     return 1;
 }
 
-int encode_uint16( uint8_t * base, 
+size_t encode_uint16( uint8_t * base, 
                    size_t * idx,
                    const uint16_t v )
 {
@@ -45,7 +45,7 @@ int encode_uint16( uint8_t * base,
     return 2;
 }
 
-int decode_uint16( uint16_t * out,
+size_t decode_uint16( uint16_t * out,
                    const uint8_t * base,
                    size_t * rem,
                    size_t * idx )
@@ -59,7 +59,7 @@ int decode_uint16( uint16_t * out,
     return 2;
 }
 
-int encode_uint32( uint8_t * base, 
+size_t encode_uint32( uint8_t * base, 
                    size_t * idx,
                    const uint32_t v )
 {
@@ -71,7 +71,7 @@ int encode_uint32( uint8_t * base,
     return 4;
 }
 
-int decode_uint32( uint32_t * out,
+size_t decode_uint32( uint32_t * out,
                    const uint8_t * base,
                    size_t * rem,
                    size_t * idx )
@@ -87,7 +87,7 @@ int decode_uint32( uint32_t * out,
     return 4;
 }
 
-int encode_buf( uint8_t * base, 
+size_t encode_buf( uint8_t * base, 
                 size_t * idx,
                 const void * p, 
                 size_t s)
@@ -98,7 +98,7 @@ int encode_buf( uint8_t * base,
 }
 
 /* Copy from base to out of size bufsize */
-int decode_buf( uint8_t * out,
+size_t decode_buf( uint8_t * out,
                 size_t bufsize,
                 const uint8_t * base,
                 size_t * rem,
@@ -114,14 +114,14 @@ int decode_buf( uint8_t * out,
 
 
 
-int encode_mac( uint8_t * base, 
+size_t encode_mac( uint8_t * base, 
                 size_t * idx,
                 const n2n_mac_t m )
 {
     return encode_buf( base, idx, m, N2N_MAC_SIZE );
 }
 
-int decode_mac( uint8_t * out, /* of size N2N_MAC_SIZE. This clearer than passing a n2n_mac_t */
+size_t decode_mac( uint8_t * out, /* of size N2N_MAC_SIZE. This clearer than passing a n2n_mac_t */
                 const uint8_t * base,
                 size_t * rem,
                 size_t * idx )
@@ -131,7 +131,7 @@ int decode_mac( uint8_t * out, /* of size N2N_MAC_SIZE. This clearer than passin
 
 
 
-int encode_common( uint8_t * base, 
+ssize_t encode_common( uint8_t * base, 
                    size_t * idx,
                    const n2n_common_t * common )
 {
@@ -148,7 +148,7 @@ int encode_common( uint8_t * base,
     return -1;
 }
 
-int decode_common( n2n_common_t * out,
+ssize_t decode_common( n2n_common_t * out,
                    const uint8_t * base,
                    size_t * rem,
                    size_t * idx )
@@ -173,11 +173,11 @@ int decode_common( n2n_common_t * out,
 }
 
 
-int encode_sock( uint8_t * base, 
+ssize_t encode_sock( uint8_t * base, 
                  size_t * idx,
                  const n2n_sock_t * sock )
 {
-    int retval=0;
+    ssize_t retval=0;
     uint16_t f;
 
     switch (sock->family) 
@@ -199,14 +199,14 @@ int encode_sock( uint8_t * base,
         break;
     }
     default:
-        retval=-1;
+        retval = -1;
     }
 
     return retval;
 }
 
 
-int decode_sock( n2n_sock_t * sock,
+ssize_t decode_sock( n2n_sock_t * sock,
                  const uint8_t * base,
                  size_t * rem,
                  size_t * idx )
@@ -235,12 +235,12 @@ int decode_sock( n2n_sock_t * sock,
     return (idx-idx0);
 }
 
-int encode_REGISTER( uint8_t * base, 
+size_t encode_REGISTER( uint8_t * base, 
                      size_t * idx,
                      const n2n_common_t * common, 
                      const n2n_REGISTER_t * reg )
 {
-    int retval=0;
+    size_t retval=0;
     retval += encode_common( base, idx, common );
     retval += encode_buf( base, idx, reg->cookie, N2N_COOKIE_SIZE );
     retval += encode_mac( base, idx, reg->srcMac );
@@ -253,7 +253,7 @@ int encode_REGISTER( uint8_t * base,
     return retval;
 }
 
-int decode_REGISTER( n2n_REGISTER_t * reg,
+size_t decode_REGISTER( n2n_REGISTER_t * reg,
                      const n2n_common_t * cmn, /* info on how to interpret it */
                      const uint8_t * base,
                      size_t * rem,
@@ -273,12 +273,12 @@ int decode_REGISTER( n2n_REGISTER_t * reg,
     return retval;
 }
 
-int encode_REGISTER_SUPER( uint8_t * base, 
+size_t encode_REGISTER_SUPER( uint8_t * base, 
                            size_t * idx,
                            const n2n_common_t * common, 
                            const n2n_REGISTER_SUPER_t * reg )
 {
-    int retval=0;
+    size_t retval=0;
     retval += encode_common( base, idx, common );
     retval += encode_buf( base, idx, reg->cookie, N2N_COOKIE_SIZE );
     retval += encode_mac( base, idx, reg->edgeMac );
@@ -288,7 +288,7 @@ int encode_REGISTER_SUPER( uint8_t * base,
     return retval;
 }
 
-int decode_REGISTER_SUPER( n2n_REGISTER_SUPER_t * reg,
+size_t decode_REGISTER_SUPER( n2n_REGISTER_SUPER_t * reg,
                            const n2n_common_t * cmn, /* info on how to interpret it */
                            const uint8_t * base,
                            size_t * rem,
@@ -304,12 +304,12 @@ int decode_REGISTER_SUPER( n2n_REGISTER_SUPER_t * reg,
     return retval;
 }
 
-int encode_REGISTER_ACK( uint8_t * base, 
+size_t encode_REGISTER_ACK( uint8_t * base, 
                          size_t * idx,
                          const n2n_common_t * common, 
                          const n2n_REGISTER_ACK_t * reg )
 {
-    int retval=0;
+    size_t retval=0;
     retval += encode_common( base, idx, common );
     retval += encode_buf( base, idx, reg->cookie, N2N_COOKIE_SIZE );
     retval += encode_mac( base, idx, reg->dstMac );
@@ -326,7 +326,7 @@ int encode_REGISTER_ACK( uint8_t * base,
     return retval;
 }
 
-int decode_REGISTER_ACK( n2n_REGISTER_ACK_t * reg,
+size_t decode_REGISTER_ACK( n2n_REGISTER_ACK_t * reg,
                          const n2n_common_t * cmn, /* info on how to interpret it */
                          const uint8_t * base,
                          size_t * rem,
@@ -349,12 +349,12 @@ int decode_REGISTER_ACK( n2n_REGISTER_ACK_t * reg,
     return retval;
 }
 
-int encode_REGISTER_SUPER_ACK( uint8_t * base,
+size_t encode_REGISTER_SUPER_ACK( uint8_t * base,
                                size_t * idx,
                                const n2n_common_t * common,
                                const n2n_REGISTER_SUPER_ACK_t * reg )
 {
-    int retval=0;
+    size_t retval=0;
     retval += encode_common( base, idx, common );
     retval += encode_buf( base, idx, reg->cookie, N2N_COOKIE_SIZE );
     retval += encode_mac( base, idx, reg->edgeMac );
@@ -370,7 +370,7 @@ int encode_REGISTER_SUPER_ACK( uint8_t * base,
     return retval;
 }
 
-int decode_REGISTER_SUPER_ACK( n2n_REGISTER_SUPER_ACK_t * reg,
+size_t decode_REGISTER_SUPER_ACK( n2n_REGISTER_SUPER_ACK_t * reg,
                                const n2n_common_t * cmn, /* info on how to interpret it */
                                const uint8_t * base,
                                size_t * rem,
@@ -419,12 +419,12 @@ int fill_sockaddr( struct sockaddr * addr,
 }
 
 
-int encode_PACKET( uint8_t * base, 
+size_t encode_PACKET( uint8_t * base, 
                    size_t * idx,
                    const n2n_common_t * common, 
                    const n2n_PACKET_t * pkt )
 {
-    int retval=0;
+    size_t retval=0;
     retval += encode_common( base, idx, common );
     retval += encode_mac( base, idx, pkt->srcMac );
     retval += encode_mac( base, idx, pkt->dstMac );
@@ -438,7 +438,7 @@ int encode_PACKET( uint8_t * base,
 }
 
 
-int decode_PACKET( n2n_PACKET_t * pkt,
+size_t decode_PACKET( n2n_PACKET_t * pkt,
                    const n2n_common_t * cmn, /* info on how to interpret it */
                    const uint8_t * base,
                    size_t * rem,
