@@ -70,7 +70,7 @@ static DWORD set_dhcp(struct tuntap_dev* device) {
     GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
 
     _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
-    _snwprintf(netsh, 1024, L"netsh interface ipv4 set address %s dhcp", if_name);
+    _snwprintf(netsh, 1024, L"interface ipv4 set address %s dhcp", if_name);
     memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
 
     shex.cbSize       = sizeof( SHELLEXECUTEINFO );
@@ -120,7 +120,7 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
     inet_ntop(AF_INET, &device->device_mask, mask, 16);
 
     _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
-    _snwprintf(netsh, 1024, L"netsh interface ip set address %s static %hs %hs", if_name, ip, mask);
+    _snwprintf(netsh, 1024, L"interface ip set address %s static %hs %hs", if_name, ip, mask);
     memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
 
     shex.cbSize       = sizeof( SHELLEXECUTEINFO );
