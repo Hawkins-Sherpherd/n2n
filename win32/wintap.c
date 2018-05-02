@@ -345,12 +345,12 @@ ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) 
 
 /* ************************************************ */
 
-int tuntap_open(struct tuntap_dev *device, 
-                char *dev, 
+int tuntap_open(struct tuntap_dev *device,
+                char *dev,
                 const char *address_mode, /* static or dhcp */
-                char *device_ip, 
-                char *device_mask, 
-                const char * device_mac, 
+                char *device_ip,
+                char *device_mask,
+                const char * device_mac,
                 int mtu) {
     return(open_wintap(device, address_mode, device_ip, device_mask, device_mac, mtu));
 }
@@ -400,8 +400,8 @@ void tuntap_get_address(struct tuntap_dev *tuntap) {
         adapter = adapter->Next;
     }
 
-    free(adapter_list);    
-    printf("Device %ls set to %s/%s\n", 
+    free(adapter_list);
+    printf("Device %ls set to %s/%s\n",
         tuntap->device_name,
         inet_ntop(AF_INET, &tuntap->ip_addr, buffer, 16),
         inet_ntop(AF_INET, &tuntap->device_mask, buffer2, 16)
