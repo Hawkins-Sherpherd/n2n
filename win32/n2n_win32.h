@@ -123,5 +123,6 @@ typedef struct tuntap_dev {
 
 #define index(a, b) strchr(a, b)
 
+extern void initWin32();
 
 #endif

@@ -58,7 +58,29 @@ static ULONG get_adapter_index(PWSTR device_name) {
 
 static DWORD set_dhcp(struct tuntap_dev* device) {
     IP_ADAPTER_INDEX_MAP iface;
+    NET_LUID luid;
+    WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
+    WCHAR windows_path[256];
+    WCHAR cmd[256];
+    WCHAR netsh[1024];
+    PROCESS_INFORMATION pi = {0};
+    STARTUPINFO si = {0};
     DWORD rc;
+
+    ConvertInterfaceIndexToLuid(device->ifIdx, &luid);
+    ConvertInterfaceLuidToNameW(&luid, if_name, MAX_ADAPTER_NAME_LENGTH);
+    GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
+
+    _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
+    _snwprintf(netsh, 1024, L"netsh interface ipv4 set address %s dhcp", if_name);
+
+    si.cb = sizeof(STARTUPINFO);
+    CreateProcess( cmd, netsh, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi );
+    WaitForSingleObject(pi.hProcess, 100);
+    GetExitCodeProcess(pi.hProcess, &rc);
+    //printf("rc=%u\n",rc);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
 
     iface.Index = device->ifIdx;
     _snwprintf(iface.Name, MAX_ADAPTER_NAME, L"\\DEVICE\\TCPIP_%s", device->device_name);
@@ -152,7 +174,7 @@ int open_wintap(struct tuntap_dev *device,
                 continue;
         }
 
-        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAPSUFFIX, adapterid);
+        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAP_WIN_SUFFIX, adapterid);
         device->device_handle = CreateFile(tapname, GENERIC_WRITE | GENERIC_READ,
                                            0, /* Don't let other processes share or open the resource until the handle's been closed */
                                            0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
@@ -181,7 +203,7 @@ int open_wintap(struct tuntap_dev *device,
     /* Try to open the corresponding tap device->device_name */
 
     if(device->device_handle == INVALID_HANDLE_VALUE) {
-        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAPSUFFIX, device->device_name);
+        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAP_WIN_SUFFIX, device->device_name);
         device->device_handle = CreateFile(tapname, GENERIC_WRITE | GENERIC_READ, 0, 0,
                                            OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
     }
@@ -192,7 +214,7 @@ int open_wintap(struct tuntap_dev *device,
     }
 
     /* Get MAC address from tap device->device_name */
-    if(!DeviceIoControl(device->device_handle, TAP_IOCTL_GET_MAC,
+    if(!DeviceIoControl(device->device_handle, TAP_WIN_IOCTL_GET_MAC,
                         device->mac_addr, sizeof(device->mac_addr),
                         device->mac_addr, sizeof(device->mac_addr), &len, 0)) {
         printf("Could not get MAC address from Windows tap %ls\n", device->device_name);
@@ -217,7 +239,6 @@ int open_wintap(struct tuntap_dev *device,
     if ( 0 == strcmp("dhcp", address_mode) )
     {
         rc = set_dhcp(device);
-        tuntap_get_address(device);
     }
     else
     {        
@@ -225,12 +246,7 @@ int open_wintap(struct tuntap_dev *device,
     }
 
     if (rc == 0) {
-        char buffer[16], buffer2[16];
-        printf("Device %ls set to %s/%s\n", 
-            device->device_name,
-            inet_ntop(AF_INET, &device->ip_addr, buffer, 16),
-            inet_ntop(AF_INET, &device->device_mask, buffer2, 16)
-        );
+        tuntap_get_address(device);
     } else
         printf("WARNING: Unable to set device %ls IP address [rc=%u]\n", device->device_name, rc);
 
@@ -240,7 +256,7 @@ int open_wintap(struct tuntap_dev *device,
         printf("WARNING: MTU set is not supported on Windows\n");
 
     /* set driver media status to 'connected' (i.e. set the interface up) */
-    if (!DeviceIoControl (device->device_handle, TAP_IOCTL_SET_MEDIA_STATUS,
+    if (!DeviceIoControl (device->device_handle, TAP_WIN_IOCTL_SET_MEDIA_STATUS,
                           &status, sizeof (status),
                           &status, sizeof (status), &len, NULL))
         printf("WARNING: Unable to enable TAP adapter\n");
@@ -332,6 +348,7 @@ void tuntap_close(struct tuntap_dev *tuntap) {
 /* Fill out the ip_addr value from the interface. Called to pick up dynamic
  * address changes. */
 void tuntap_get_address(struct tuntap_dev *tuntap) {
+    char buffer[16], buffer2[16];
     PMIB_IPADDRTABLE addr_table;
     ULONG size;
     
@@ -348,6 +365,12 @@ void tuntap_get_address(struct tuntap_dev *tuntap) {
         }
     }
     free(addr_table);
+    
+    printf("Device %ls set to %s/%s\n", 
+        tuntap->device_name,
+        inet_ntop(AF_INET, &tuntap->ip_addr, buffer, 16),
+        inet_ntop(AF_INET, &tuntap->device_mask, buffer2, 16)
+    );
 }
 /* ************************************************ */
 
