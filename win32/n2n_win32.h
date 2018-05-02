@@ -115,6 +115,7 @@ typedef struct tuntap_dev {
 	HANDLE device_handle;
 	PWSTR  device_name;
 	NET_IFINDEX  ifIdx;
+        NET_LUID luid;
 	OVERLAPPED overlap_read, overlap_write;
 	uint8_t      mac_addr[6];
 	uint32_t     ip_addr, device_mask;

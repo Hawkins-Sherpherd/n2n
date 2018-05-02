@@ -39,34 +39,25 @@ void initWin32() {
     }
 }
 
-static ULONG get_adapter_index(PWSTR device_name) {
+static int get_adapter_luid(PWSTR device_name, NET_LUID* luid) {
     CLSID guid;
-    NET_LUID luid;
-    NET_IFINDEX index = NET_IFINDEX_UNSPECIFIED;
 
     if (CLSIDFromString(device_name, &guid) != NO_ERROR)
-        return NET_IFINDEX_UNSPECIFIED;
+        return -1;
     
-    if (ConvertInterfaceGuidToLuid(&guid, &luid) != NO_ERROR)
-        return NET_IFINDEX_UNSPECIFIED;
-    
-    if (ConvertInterfaceLuidToIndex(&luid, &index) != NO_ERROR)
-        return NET_IFINDEX_UNSPECIFIED;
+    if (ConvertInterfaceGuidToLuid(&guid, luid) != NO_ERROR)
+        return -1;
 
-    return index;
+    return 0;
 }
 
 static DWORD set_dhcp(struct tuntap_dev* device) {
-    NET_LUID luid;
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
-    WCHAR windows_path[256];
-    WCHAR cmd[256];
-    WCHAR netsh[1024];
+    WCHAR windows_path[64], cmd[128], netsh[256];
     DWORD rc;
     SHELLEXECUTEINFO shex;
 
-    ConvertInterfaceIndexToLuid(device->ifIdx, &luid);
-    ConvertInterfaceLuidToNameW(&luid, if_name, MAX_ADAPTER_NAME_LENGTH);
+    ConvertInterfaceLuidToNameW(&device->luid, if_name, MAX_ADAPTER_NAME_LENGTH);
     GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
 
     _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
@@ -104,17 +95,13 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
             return rc;
     }
 #endif
-    NET_LUID luid;
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
-    WCHAR windows_path[256];
-    WCHAR cmd[256];
-    WCHAR netsh[1024];
+    WCHAR windows_path[64], cmd[128], netsh[256];
     char ip[16], mask[16];
     SHELLEXECUTEINFO shex;
     DWORD rc;
 
-    ConvertInterfaceIndexToLuid(device->ifIdx, &luid);
-    ConvertInterfaceLuidToNameW(&luid, if_name, MAX_ADAPTER_NAME_LENGTH);
+    ConvertInterfaceLuidToNameW(&device->luid, if_name, MAX_ADAPTER_NAME_LENGTH);
     GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
     inet_ntop(AF_INET, &device->ip_addr, ip, 16);
     inet_ntop(AF_INET, &device->device_mask, mask, 16);
@@ -156,6 +143,7 @@ int open_wintap(struct tuntap_dev *device,
     device->device_handle = INVALID_HANDLE_VALUE;
     device->device_name = NULL;
     device->ifIdx = NET_IFINDEX_UNSPECIFIED;
+    memset(&device->luid, 0, sizeof(NET_LUID));
 
     if (inet_pton(AF_INET, device_ip, &device->ip_addr) != 1) {
         printf("device ip is not a valid IP address\n");
@@ -220,7 +208,12 @@ int open_wintap(struct tuntap_dev *device,
         device->device_name = _wcsdup(adapterid);
 
      if(device->ifIdx == NET_IFINDEX_UNSPECIFIED) {
-        device->ifIdx = get_adapter_index(adapterid);
+        if (get_adapter_luid(adapterid, &device->luid) == 0) {
+            IF_INDEX index = NET_IFINDEX_UNSPECIFIED;
+            if (ConvertInterfaceLuidToIndex(&device->luid, &index) == 0) {
+                device->ifIdx = index;
+            }
+        }
     }
 
     /* Try to open the corresponding tap device->device_name */
@@ -372,23 +365,42 @@ void tuntap_close(struct tuntap_dev *tuntap) {
  * address changes. */
 void tuntap_get_address(struct tuntap_dev *tuntap) {
     char buffer[16], buffer2[16];
-    PMIB_IPADDRTABLE addr_table;
-    ULONG size;
-    
-    if (GetIpAddrTable(NULL, &size, FALSE) != ERROR_INSUFFICIENT_BUFFER)
+    IP_ADAPTER_ADDRESSES* adapter_list;
+    ULONG size = 0;
+
+    if (GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_FRIENDLY_NAME, NULL, NULL, &size) != ERROR_BUFFER_OVERFLOW)
         return;
-    if ((addr_table = malloc(size)) == NULL)
+    adapter_list = malloc (size);
+
+    if (GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_FRIENDLY_NAME, NULL, adapter_list, &size) != NO_ERROR) {
+        free(adapter_list);
         return;
-    if (GetIpAddrTable(addr_table, &size, FALSE) != NO_ERROR)
-        return;
-    for (DWORD i=0; i < addr_table->dwNumEntries; i++) {
-        if (addr_table->table[i].dwIndex == tuntap->ifIdx) {
-            tuntap->ip_addr = addr_table->table[i].dwAddr;
-            tuntap->device_mask = addr_table->table[i].dwMask;
-        }
     }
-    free(addr_table);
-    
+
+    IP_ADAPTER_ADDRESSES* adapter = adapter_list;
+    while (adapter) {
+        if (adapter->IfIndex == tuntap->ifIdx) {
+            IP_ADAPTER_UNICAST_ADDRESS* uni = adapter->FirstUnicastAddress;
+            while (uni) {
+                /* skip LL-addresses */
+                if (uni->SuffixOrigin == IpSuffixOriginLinkLayerAddress) {
+                    uni = uni->Next;
+                    continue;
+                }
+
+                memcpy(&tuntap->ip_addr, &((struct sockaddr_in*) uni->Address.lpSockaddr)->sin_addr, 4);
+                uint32_t mask = 0x0000;
+                for (int i = uni->OnLinkPrefixLength; i--;)
+                    mask = ((mask | 0x8000) | mask >> 1);
+                uni = uni->Next;
+            }
+            
+            break;
+        }
+        adapter = adapter->Next;
+    }
+
+    free(adapter_list);    
     printf("Device %ls set to %s/%s\n", 
         tuntap->device_name,
         inet_ntop(AF_INET, &tuntap->ip_addr, buffer, 16),

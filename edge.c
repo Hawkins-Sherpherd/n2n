@@ -1982,7 +1982,9 @@ int main(int argc, char* argv[])
 
     n2n_edge_t eee; /* single instance for this program */
 
-#ifdef N2N_HAS_CAPABILITIES    
+#ifdef N2N_HAS_CAPABILITIES
+    prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L);
+    
     caps_original = cap_get_proc();
     /* drop all capabilities, permit some for later */
     caps = cap_init();
@@ -2322,7 +2324,6 @@ int main(int argc, char* argv[])
 
 #if defined(N2N_HAS_CAPABILITIES)
     /* drop capabilities */
-    prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L);
     caps = cap_init();
     cap_set_proc(caps);
     cap_free(caps);
