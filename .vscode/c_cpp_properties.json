@@ -30,7 +30,9 @@
                 "/usr/local/include",
                 "${workspaceFolder}"
             ],
-            "defines": [],
+            "defines": [
+                "_POSIX_C_SOURCE=200809"
+            ],
             "intelliSenseMode": "clang-x64",
             "browse": {
                 "path": [

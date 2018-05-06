@@ -43,37 +43,65 @@ const uint8_t ipv6_multicast_addr[6] = { 0x33, 0x33, 0x00, 0x00, 0x00, 0x00 }; /
 /* ************************************** */
 
 SOCKET open_socket(int local_port, int bind_any) {
-  SOCKET sock_fd;
-  struct sockaddr_in local_address;
-  int sockopt = 1;
+    SOCKET sock_fd;
+    struct sockaddr_in local_address;
+    int sockopt = 1;
 
-  if((sock_fd = socket(PF_INET, SOCK_DGRAM, 0))  < 0) {
-    traceEvent(TRACE_ERROR, "Unable to create socket [%s][%d]\n",
-	       strerror(errno), sock_fd);
-    return(-1);
-  }
+    if((sock_fd = socket(PF_INET, SOCK_DGRAM, 0))  < 0) {
+        traceEvent(TRACE_ERROR, "Unable to create socket [%s][%d]\n", strerror(errno), sock_fd);
+        return -1;
+    }
 
-#ifndef _WIN32
-  /* fcntl(sock_fd, F_SETFL, O_NONBLOCK); */
-#endif
+    #ifndef _WIN32
+    /* fcntl(sock_fd, F_SETFL, O_NONBLOCK); */
+    #endif
 
-  setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&sockopt, sizeof(sockopt));
+    setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&sockopt, sizeof(sockopt));
 
-  memset(&local_address, 0, sizeof(local_address));
-  local_address.sin_family = AF_INET;
-  local_address.sin_port = htons(local_port);
-  local_address.sin_addr.s_addr = htonl(bind_any?INADDR_ANY:INADDR_LOOPBACK);
-  if(bind(sock_fd, (struct sockaddr*) &local_address, sizeof(local_address)) == -1) {
-    traceEvent(TRACE_ERROR, "Bind error [%s]\n", strerror(errno));
-    return(-1);
-  }
+    memset(&local_address, 0, sizeof(local_address));
+    local_address.sin_family = AF_INET;
+    local_address.sin_port = htons(local_port);
+    local_address.sin_addr.s_addr = htonl(bind_any?INADDR_ANY:INADDR_LOOPBACK);
+    if(bind(sock_fd, (struct sockaddr*) &local_address, sizeof(local_address)) == -1) {
+        traceEvent(TRACE_ERROR, "Bind error [%s]\n", strerror(errno));
+        return -1;
+    }
 
-  return(sock_fd);
+    return sock_fd;
+}
+
+SOCKET open_socket6(int local_port, int bind_any) {
+    SOCKET sock_fd;
+    struct sockaddr_in6 local_address;
+    int sockopt = 1;
+
+    if((sock_fd = socket(PF_INET6, SOCK_DGRAM, 0)) < 0) {
+        traceEvent(TRACE_ERROR, "Unable to create socket [%s][%d]\n", strerror(errno), sock_fd);
+        return -1;
+    }
+
+    #ifndef _WIN32
+    /* fcntl(sock_fd, F_SETFL, O_NONBLOCK); */
+    #endif
+    setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&sockopt, sizeof(sockopt));
+    setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&sockopt, sizeof(sockopt));
+
+    memset(&local_address, 0, sizeof(local_address));
+    local_address.sin6_family = AF_INET6;
+    local_address.sin6_port = htons(local_port);
+    local_address.sin6_addr = bind_any ? in6addr_any : in6addr_loopback;
+
+    if(bind(sock_fd, (struct sockaddr*) &local_address, sizeof(local_address)) == -1) {
+        traceEvent(TRACE_ERROR, "Bind error [%s]\n", strerror(errno));
+        return -1;
+    }
+
+    return sock_fd;
 }
 
 
 int traceLevel = 2 /* NORMAL */;
-int useSyslog = 0, syslog_opened = 0;
+bool useSyslog = false, syslog_opened = false, useSystemd = false;
 
 #define N2N_TRACE_DATESIZE 32
 void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
@@ -85,9 +113,7 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
     char theDate[N2N_TRACE_DATESIZE];
     char *extra_msg = "";
     time_t theTime = time(NULL);
-#ifdef _WIN32
 	size_t i;
-#endif
 
     /* We have two paths - one if we're logging, one if we aren't
      *   Note that the no-log case is those systems which don't support it (WIN32),
@@ -96,7 +122,6 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
      */
 
     memset(buf, 0, sizeof(buf));
-    strftime(theDate, N2N_TRACE_DATESIZE, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
 
     va_start (va_ap, format);
     vsnprintf(buf, sizeof(buf)-1, format, va_ap);
@@ -111,22 +136,28 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
 
 #ifndef _WIN32
     if(useSyslog) {
-      if(!syslog_opened) {
-        openlog("n2n", LOG_PID, LOG_DAEMON);
-        syslog_opened = 1;
-      }
+        if(!syslog_opened) {
+            openlog("n2n", LOG_PID, LOG_DAEMON);
+            syslog_opened = 1;
+        }
 
-      snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
-      syslog(LOG_INFO, "%s", out_buf);
+        snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
+        syslog(LOG_INFO, "%s", out_buf);
     } else {
-      snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
-      printf("%s\n", out_buf);
-      fflush(stdout);
+        if (useSystemd)
+            snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
+        else {
+            strftime(theDate, N2N_TRACE_DATESIZE, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
+            for(i=strlen(file)-1; i>0; i--) if(file[i] == '/') { i++; break; };
+            snprintf(out_buf, sizeof(out_buf), "%s [%15s:%4d] %s%s", theDate, &file[i], line, extra_msg, buf);
+        }
+        printf("%s\n", out_buf);
+        fflush(stdout);
     }
 #else
-    /* this is the WIN32 code */
+    strftime(theDate, N2N_TRACE_DATESIZE, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
 	for(i=strlen(file)-1; i>0; i--) if(file[i] == '\\') { i++; break; };
-    snprintf(out_buf, sizeof(out_buf), "%s [%11s:%4d] %s%s", theDate, &file[i], line, extra_msg, buf);
+    snprintf(out_buf, sizeof(out_buf), "%s [%15s:%4d] %s%s", theDate, &file[i], line, extra_msg, buf);
     printf("%s\n", out_buf);
     fflush(stdout);
 #endif
@@ -395,20 +426,21 @@ extern int str2mac( uint8_t * outmac /* 6 bytes */, const char * s )
 extern char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock )
 {
+    char buffer[INET6_ADDRSTRLEN];
+
     if ( NULL == out ) { return NULL; }
     memset(out, 0, N2N_SOCKBUF_SIZE);
 
     if ( AF_INET6 == sock->family )
     {
-        /* INET6 not written yet */
-        snprintf( out, N2N_SOCKBUF_SIZE, "XXXX:%hu", sock->port );
+        inet_ntop(AF_INET6, &sock->addr, buffer, INET6_ADDRSTRLEN);
+        snprintf( out, N2N_SOCKBUF_SIZE, "[%s]:%hu", buffer, sock->port );
         return out;
     }
     else
     {
-        const uint8_t * a = sock->addr.v4;
-        snprintf( out, N2N_SOCKBUF_SIZE, "%hu.%hu.%hu.%hu:%hu", 
-                   (a[0] & 0xff), (a[1] & 0xff), (a[2] & 0xff), (a[3] & 0xff), sock->port );
+        inet_ntop(AF_INET, &sock->addr, buffer, INET_ADDRSTRLEN);
+        snprintf( out, N2N_SOCKBUF_SIZE, "%s:%hu", buffer, sock->port );
         return out;
     }
 }

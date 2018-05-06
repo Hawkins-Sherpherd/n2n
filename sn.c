@@ -11,11 +11,10 @@
 #include "n2n.h"
 
 
-#define N2N_SN_LPORT_DEFAULT 7654
+#define N2N_SN_LPORT_DEFAULT SUPERNODE_PORT
 #define N2N_SN_PKTBUF_SIZE   2048
 
 #define N2N_SN_MGMT_PORT                5645
-
 
 struct sn_stats
 {
@@ -37,6 +36,7 @@ struct n2n_sn
     int                 daemon;         /* If non-zero then daemonise. */
     uint16_t            lport;          /* Local UDP port to bind to. */
     SOCKET              sock;           /* Main socket for UDP traffic with edges. */
+    SOCKET              sock6;
     SOCKET              mgmt_sock;      /* management socket. */
     struct peer_info *  edges;          /* Link list of registered edges. */
 };
@@ -69,6 +69,7 @@ static int init_sn( n2n_sn_t * sss )
     sss->daemon = 1; /* By defult run as a daemon. */
     sss->lport = N2N_SN_LPORT_DEFAULT;
     sss->sock = -1;
+    sss->sock6 = -1;
     sss->mgmt_sock = -1;
     sss->edges = NULL;
 
@@ -83,13 +84,19 @@ static void deinit_sn( n2n_sn_t * sss )
     {
         closesocket(sss->sock);
     }
-    sss->sock=-1;
+    sss->sock = -1;
+
+    if (sss->sock6 >= 0)
+    {
+        closesocket(sss->sock6);
+    }
+    sss->sock6 = -1;
 
     if ( sss->mgmt_sock >= 0 )
     {
         closesocket(sss->mgmt_sock);
     }
-    sss->mgmt_sock=-1;
+    sss->mgmt_sock = -1;
 
     purge_peer_list( &(sss->edges), 0xffffffff );
 }
@@ -118,7 +125,7 @@ static int update_edge( n2n_sn_t * sss,
     n2n_sock_str_t      sockbuf;
     struct peer_info *  scan;
 
-    traceEvent( TRACE_DEBUG, "update_edge for %s [%s]",
+    traceEvent( TRACE_DEBUG, "update_edge for %s %s",
                 macaddr_str( mac_buf, edgeMac ),
                 sock_to_cstr( sockbuf, sender_sock ) );
 
@@ -188,16 +195,30 @@ static ssize_t sendto_sock(n2n_sn_t * sss,
         udpsock.sin_port = htons( sock->port );
         memcpy( &(udpsock.sin_addr.s_addr), &(sock->addr.v4), IPV4_SIZE );
 
-        traceEvent( TRACE_DEBUG, "sendto_sock %lu to [%s]",
+        traceEvent( TRACE_DEBUG, "sendto_sock %lu to %s",
                     pktsize,
                     sock_to_cstr( sockbuf, sock ) );
 
         return sendto( sss->sock, pktbuf, pktsize, 0, 
                        (const struct sockaddr *)&udpsock, sizeof(struct sockaddr_in) );
     }
+    else if ( AF_INET6 == sock->family )
+    {
+        struct sockaddr_in6 udpsock;
+
+        udpsock.sin6_family = AF_INET6;
+        udpsock.sin6_port = htons( sock->port );
+        memcpy( &(udpsock.sin6_addr), &(sock->addr.v6), IPV6_SIZE );
+
+        traceEvent( TRACE_DEBUG, "sendto_sock %lu to %s",
+                    pktsize,
+                    sock_to_cstr( sockbuf, sock ) );
+
+        return sendto( sss->sock6, pktbuf, pktsize, 0, 
+                       (const struct sockaddr *)&udpsock, sizeof(struct sockaddr_in6) );
+    }
     else
     {
-        /* AF_INET6 not implemented */
         errno = EAFNOSUPPORT;
         return -1;
     }
@@ -285,7 +306,7 @@ static int try_broadcast( n2n_sn_t * sss,
             if(data_sent_len != pktsize)
             {
                 ++(sss->stats.errors);
-                traceEvent(TRACE_WARNING, "multicast %lu to [%s] %s failed %s",
+                traceEvent(TRACE_WARNING, "multicast %lu to %s %s failed %s",
                            pktsize,
                            sock_to_cstr( sockbuf, &(scan->sock) ),
                            macaddr_str(mac_buf, scan->mac_addr),
@@ -294,7 +315,7 @@ static int try_broadcast( n2n_sn_t * sss,
             else 
             {
                 ++(sss->stats.broadcast);
-                traceEvent(TRACE_DEBUG, "multicast %lu to [%s] %s",
+                traceEvent(TRACE_DEBUG, "multicast %lu to %s %s",
                            pktsize,
                            sock_to_cstr( sockbuf, &(scan->sock) ),
                            macaddr_str(mac_buf, scan->mac_addr));
@@ -376,7 +397,7 @@ static int process_mgmt( n2n_sn_t * sss,
  *
  */
 static int process_udp( n2n_sn_t * sss, 
-                        const struct sockaddr_in * sender_sock,
+                        const struct sockaddr * sender_sock,
                         const uint8_t * udp_buf, 
                         size_t udp_size,
                         time_t now)
@@ -453,9 +474,17 @@ static int process_udp( n2n_sn_t * sss,
             /* We are going to add socket even if it was not there before */
             cmn2.flags |= N2N_FLAGS_SOCKET | N2N_FLAGS_FROM_SUPERNODE;
 
-            pkt.sock.family = AF_INET;
-            pkt.sock.port = ntohs(sender_sock->sin_port);
-            memcpy( pkt.sock.addr.v4, &(sender_sock->sin_addr.s_addr), IPV4_SIZE );
+            if (sender_sock->sa_family == AF_INET) {
+                struct sockaddr_in* sock = (struct sockaddr_in*) sender_sock;
+                pkt.sock.family = AF_INET;
+                pkt.sock.port = ntohs(sock->sin_port);
+                memcpy( pkt.sock.addr.v4, &(sock->sin_addr), IPV4_SIZE );
+            } else if (sender_sock->sa_family == AF_INET6) {
+                struct sockaddr_in6* sock = (struct sockaddr_in6*) sender_sock;
+                pkt.sock.family = AF_INET6;
+                pkt.sock.port = ntohs(sock->sin6_port);
+                memcpy( pkt.sock.addr.v6, &(sock->sin6_addr), IPV6_SIZE );
+            }
 
             rec_buf = encbuf;
 
@@ -516,9 +545,17 @@ static int process_udp( n2n_sn_t * sss,
             /* We are going to add socket even if it was not there before */
             cmn2.flags |= N2N_FLAGS_SOCKET | N2N_FLAGS_FROM_SUPERNODE;
 
-            reg.sock.family = AF_INET;
-            reg.sock.port = ntohs(sender_sock->sin_port);
-            memcpy( reg.sock.addr.v4, &(sender_sock->sin_addr.s_addr), IPV4_SIZE );
+            if (sender_sock->sa_family == AF_INET) {
+                struct sockaddr_in* sock = (struct sockaddr_in*) sender_sock;
+                reg.sock.family = AF_INET;
+                reg.sock.port = ntohs(sock->sin_port);
+                memcpy( reg.sock.addr.v4, &(sock->sin_addr), IPV4_SIZE );
+            } else if (sender_sock->sa_family == AF_INET6) {
+                struct sockaddr_in6* sock = (struct sockaddr_in6*) sender_sock;
+                reg.sock.family = AF_INET6;
+                reg.sock.port = ntohs(sock->sin6_port);
+                memcpy( reg.sock.addr.v6, &(sock->sin6_addr), IPV6_SIZE );
+            }
 
             rec_buf = encbuf;
 
@@ -547,7 +584,7 @@ static int process_udp( n2n_sn_t * sss,
     }
     else if ( msg_type == MSG_TYPE_REGISTER_ACK )
     {
-        traceEvent( TRACE_DEBUG, "Rx REGISTER_ACK (NOT IMPLEMENTED) SHould not be via supernode" );
+        traceEvent( TRACE_DEBUG, "Rx REGISTER_ACK (NOT IMPLEMENTED) Should not be via supernode" );
     }
     else if ( msg_type == MSG_TYPE_REGISTER_SUPER )
     {
@@ -572,14 +609,22 @@ static int process_udp( n2n_sn_t * sss,
         memcpy( ack.edgeMac, reg.edgeMac, sizeof(n2n_mac_t) );
         ack.lifetime = reg_lifetime( sss );
 
-        ack.sock.family = AF_INET;
-        ack.sock.port = ntohs(sender_sock->sin_port);
-        memcpy( ack.sock.addr.v4, &(sender_sock->sin_addr.s_addr), IPV4_SIZE );
+        if (sender_sock->sa_family == AF_INET) {
+            struct sockaddr_in* sock = (struct sockaddr_in*) sender_sock;
+            ack.sock.family = AF_INET;
+            ack.sock.port = ntohs(sock->sin_port);
+            memcpy( ack.sock.addr.v4, &(sock->sin_addr), IPV4_SIZE );
+        } else if (sender_sock->sa_family == AF_INET6) {
+            struct sockaddr_in6* sock = (struct sockaddr_in6*) sender_sock;
+            ack.sock.family = AF_INET6;
+            ack.sock.port = ntohs(sock->sin6_port);
+            memcpy( ack.sock.addr.v6, &(sock->sin6_addr), IPV6_SIZE );
+        }
 
         ack.num_sn=0; /* No backup */
         memset( &(ack.sn_bak), 0, sizeof(n2n_sock_t) );
 
-        traceEvent( TRACE_DEBUG, "Rx REGISTER_SUPER for %s [%s]",
+        traceEvent( TRACE_DEBUG, "Rx REGISTER_SUPER for %s %s",
                     macaddr_str( mac_buf, reg.edgeMac ),
                     sock_to_cstr( sockbuf, &(ack.sock) ) );
 
@@ -590,7 +635,7 @@ static int process_udp( n2n_sn_t * sss,
         sendto( sss->sock, ackbuf, encx, 0, 
                 (struct sockaddr *)sender_sock, sizeof(struct sockaddr_in) );
 
-        traceEvent( TRACE_DEBUG, "Tx REGISTER_SUPER_ACK for %s [%s]",
+        traceEvent( TRACE_DEBUG, "Tx REGISTER_SUPER_ACK for %s %s",
                     macaddr_str( mac_buf, reg.edgeMac ),
                     sock_to_cstr( sockbuf, &(ack.sock) ) );
 
@@ -606,7 +651,8 @@ static void exit_help(int argc, char * const argv[])
 {
     fprintf( stderr, "%s usage\n", argv[0] );
     fprintf( stderr, "-l <lport>\tSet UDP main listen port to <lport>\n" );
-
+    fprintf( stderr, "-4        \tUse IPv4 network (default)\n" );
+    fprintf( stderr, "-6        \tUse IPv6 network\n" );
 #if defined(N2N_HAVE_DAEMON)
     fprintf( stderr, "-f        \tRun in foreground.\n" );
 #endif /* #if defined(N2N_HAVE_DAEMON) */
@@ -625,6 +671,8 @@ static const struct option long_options[] = {
   { "local-port",      required_argument, NULL, 'l' },
   { "help"   ,         no_argument,       NULL, 'h' },
   { "verbose",         no_argument,       NULL, 'v' },
+  { "ipv4",            no_argument,       NULL, '4' },
+  { "ipv6",            no_argument,       NULL, '6' },
   { NULL,              0,                 NULL,  0  }
 };
 
@@ -632,13 +680,14 @@ static const struct option long_options[] = {
 int main( int argc, char * const argv[] )
 {
     n2n_sn_t sss;
+    bool ipv4 = false, ipv6 = false;
 
     init_sn( &sss );
 
     {
         int opt;
 
-        while((opt = getopt_long(argc, argv, "fl:vh", long_options, NULL)) != -1) 
+        while((opt = getopt_long(argc, argv, "fl:46vh", long_options, NULL)) != -1) 
         {
             switch (opt) 
             {
@@ -647,6 +696,12 @@ int main( int argc, char * const argv[] )
                 break;
             case 'f': /* foreground */
                 sss.daemon = 0;
+                break;
+            case '4':
+                ipv4 = true;
+                break;
+            case '6':
+                ipv6 = true;
                 break;
             case 'h': /* help */
                 exit_help(argc, argv);
@@ -659,10 +714,13 @@ int main( int argc, char * const argv[] )
         
     }
 
+    /* enable ipv4 if there was no parameter provided */
+    ipv4 = ipv4 || !ipv6;
+
 #if defined(N2N_HAVE_DAEMON)
     if (sss.daemon)
     {
-        useSyslog=1; /* traceEvent output now goes to syslog. */
+        useSyslog = true; /* traceEvent output now goes to syslog. */
         if ( -1 == daemon( 0, 0 ) )
         {
             traceEvent( TRACE_ERROR, "Failed to become daemon." );
@@ -673,15 +731,29 @@ int main( int argc, char * const argv[] )
 
     traceEvent( TRACE_DEBUG, "traceLevel is %d", traceLevel);
 
-    sss.sock = open_socket(sss.lport, 1 /*bind ANY*/ );
-    if ( -1 == sss.sock )
-    {
-        traceEvent( TRACE_ERROR, "Failed to open main socket. %s", strerror(errno) );
-        exit(-2);
+    if (ipv4) {
+        sss.sock = open_socket(sss.lport, 1 /*bind ANY*/ );
+        if ( -1 == sss.sock )
+        {
+            traceEvent( TRACE_ERROR, "Failed to open main socket. %s", strerror(errno) );
+            exit(-2);
+        }
+        else
+        {
+            traceEvent( TRACE_NORMAL, "supernode is listening on UDP4 %u (main)", sss.lport );
+        }
     }
-    else
-    {
-        traceEvent( TRACE_NORMAL, "supernode is listening on UDP %u (main)", sss.lport );
+    if (ipv6) {
+        sss.sock6 = open_socket6(sss.lport, 1 /*bind ANY*/ );
+        if ( -1 == sss.sock6 )
+        {
+            traceEvent( TRACE_ERROR, "Failed to open main socket. %s", strerror(errno) );
+            exit(-2);
+        }
+        else
+        {
+            traceEvent( TRACE_NORMAL, "supernode is listening on UDP6 %u (main)", sss.lport );
+        }
     }
 
     sss.mgmt_sock = open_socket(N2N_SN_MGMT_PORT, 0 /* bind LOOPBACK */ );
@@ -722,7 +794,10 @@ static int run_loop( n2n_sn_t * sss )
         FD_ZERO(&socket_mask);
         max_sock = (int) MAX(sss->sock, sss->mgmt_sock);
 
-        FD_SET(sss->sock, &socket_mask);
+        if (sss->sock > 0)
+            FD_SET(sss->sock, &socket_mask);
+        if (sss->sock6 > 0)
+            FD_SET(sss->sock6, &socket_mask);
         FD_SET(sss->mgmt_sock, &socket_mask);
 
         wait_time.tv_sec = 10; wait_time.tv_usec = 0;
@@ -753,7 +828,32 @@ static int run_loop( n2n_sn_t * sss )
                 if ( bread > 0 )
                 {
                     /* And the datagram has data (not just a header) */
-                    process_udp( sss, &sender_sock, pktbuf, bread, now );
+                    process_udp( sss, (struct sockaddr*) &sender_sock, pktbuf, bread, now );
+                }
+            }
+
+            if (FD_ISSET(sss->sock6, &socket_mask)) 
+            {
+                struct sockaddr_in6  sender_sock;
+                socklen_t           i;
+
+                i = sizeof(sender_sock);
+                bread = recvfrom( sss->sock6, pktbuf, N2N_SN_PKTBUF_SIZE, 0/*flags*/,
+				  (struct sockaddr*) &sender_sock, (socklen_t*) &i);
+
+                if ( bread < 0 ) /* For UDP bread of zero just means no data (unlike TCP). */
+                {
+                    /* The fd is no good now. Maybe we lost our interface. */
+                    traceEvent( TRACE_ERROR, "recvfrom() failed %d errno %d (%s)", bread, errno, strerror(errno) );
+                    keep_running=0;
+                    break;
+                }
+
+                /* We have a datagram to process */
+                if ( bread > 0 )
+                {
+                    /* And the datagram has data (not just a header) */
+                    process_udp( sss, (struct sockaddr*) &sender_sock, pktbuf, bread, now );
                 }
             }
 

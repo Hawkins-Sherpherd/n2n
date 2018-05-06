@@ -46,6 +46,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #ifndef _WIN32
 #include <netdb.h>
@@ -61,6 +62,7 @@
 
 #ifndef _WIN32
 #include <unistd.h>
+#include <sys/select.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/param.h>
@@ -186,7 +188,7 @@ typedef struct n2n_edge         n2n_edge_t;
 /* ************************************** */
 
 #define SUPERNODE_IP    "127.0.0.1"
-#define SUPERNODE_PORT  1234
+#define SUPERNODE_PORT  7654
 
 /* ************************************** */
 
@@ -203,7 +205,8 @@ typedef struct n2n_edge         n2n_edge_t;
 /* Variables */
 /* extern TWOFISH *tf; */
 extern int traceLevel;
-extern int useSyslog;
+extern bool useSyslog;
+extern bool useSystemd;
 extern const uint8_t broadcast_addr[6];
 extern const uint8_t multicast_addr[6];
 
@@ -211,12 +214,13 @@ extern const uint8_t multicast_addr[6];
 extern void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...);
 extern int  tuntap_open(tuntap_dev *device, char *dev, const char *address_mode, char *device_ip, 
 			char *device_mask, const char * device_mac, int mtu);
-extern ssize_t  tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
-extern ssize_t  tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
+extern ssize_t tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
+extern ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
 extern void tuntap_close(struct tuntap_dev *tuntap);
 extern void tuntap_get_address(struct tuntap_dev *tuntap);
 
 extern SOCKET open_socket(int local_port, int bind_any);
+extern SOCKET open_socket6(int local_port, int bind_any);
 
 extern char* intoa(uint32_t addr, char* buf, uint16_t buf_len);
 extern char* macaddr_str(macstr_t buf, const n2n_mac_t mac);

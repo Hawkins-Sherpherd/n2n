@@ -122,8 +122,6 @@ typedef struct tuntap_dev {
 	unsigned int mtu;
 } tuntap_dev;
 
-#define index(a, b) strchr(a, b)
-
 extern void initWin32();
 
 #endif

@@ -528,15 +528,16 @@ static void help() {
 /** Send a datagram to a socket defined by a n2n_sock_t */
 static ssize_t sendto_sock( SOCKET fd, const void * buf, size_t len, const n2n_sock_t * dest )
 {
-    struct sockaddr_in peer_addr;
+    /* sockaddr_in6 is larger than sockaddr_in so we use that */
+    struct sockaddr_in6 peer_addr;
     ssize_t sent;
 
-    fill_sockaddr( (struct sockaddr *) &peer_addr,
+    fill_sockaddr( (struct sockaddr*) &peer_addr,
                    sizeof(peer_addr),
                    dest );
 
     sent = sendto( fd, buf, len, 0/*flags*/,
-                   (struct sockaddr *)&peer_addr, sizeof(struct sockaddr_in) );
+                   (struct sockaddr*) &peer_addr, sizeof(struct sockaddr_in6) );
     if ( sent < 0 )
     {
         char * c = strerror(errno);
@@ -544,7 +545,7 @@ static ssize_t sendto_sock( SOCKET fd, const void * buf, size_t len, const n2n_s
     }
     else
     {
-        traceEvent( TRACE_DEBUG, "sendto sent=%d to ", (signed int)sent );
+        traceEvent( TRACE_DEBUG, "sendto sent=%d to ", (signed int) sent );
     }
 
     return sent;
@@ -1205,10 +1206,10 @@ static void send_packet2net(n2n_edge_t * eee,
 
             /* Note: all elements of the_ip are in network order */
             if( *dst != eee->device.ip_addr) {
-		/* This is a packet that needs to be routed */
-		traceEvent(TRACE_INFO, "Discarding routed packet [%s]",
-                           intoa(ntohl(*dst), ip_buf, sizeof(ip_buf)));
-		return;
+                /* This is a packet that needs to be routed */
+                traceEvent(TRACE_INFO, "Discarding routed packet [%s]",
+                                intoa(ntohl(*dst), ip_buf, sizeof(ip_buf)));
+                return;
             } else {
                 /* This packet is originated by us */
                 /* traceEvent(TRACE_INFO, "Sending non-routed packet"); */
@@ -1325,7 +1326,7 @@ static void readFromTAPSocket( n2n_edge_t * eee )
         if ( eee->drop_multicast &&
              ( is_ip6_discovery( eth_pkt, len ) ||
                is_ethMulticast( eth_pkt, len)
-                 )
+             )
             )
         {
             traceEvent(TRACE_DEBUG, "Dropping multicast");
@@ -1617,16 +1618,16 @@ static void readFromIPSocket( n2n_edge_t * eee )
     size_t              idx;
     size_t              msg_type;
     uint8_t             from_supernode;
-    struct sockaddr_in  sender_sock;
+    struct sockaddr_in6 sender_sock;
     n2n_sock_t          sender;
-    n2n_sock_t *        orig_sender=NULL;
-    time_t              now=0;
+    n2n_sock_t *        orig_sender = NULL;
+    time_t              now = 0;
 
     size_t              i;
 
     i = sizeof(sender_sock);
-    recvlen=recvfrom(eee->udp_sock, udp_buf, N2N_PKT_BUF_SIZE, 0/*flags*/,
-                     (struct sockaddr *)&sender_sock, (socklen_t*)&i);
+    recvlen = recvfrom(eee->udp_sock, udp_buf, N2N_PKT_BUF_SIZE, 0/*flags*/,
+                      (struct sockaddr*) &sender_sock, (socklen_t*)&i);
 
     if ( recvlen < 0 )
     {
@@ -1637,9 +1638,15 @@ static void readFromIPSocket( n2n_edge_t * eee )
 
     /* REVISIT: when UDP/IPv6 is supported we will need a flag to indicate which
      * IP transport version the packet arrived on. May need to UDP sockets. */
-    sender.family = AF_INET; /* udp_sock was opened PF_INET v4 */
-    sender.port = ntohs(sender_sock.sin_port);
-    memcpy( &(sender.addr.v4), &(sender_sock.sin_addr.s_addr), IPV4_SIZE );
+    sender.family = sender_sock.sin6_family;
+    if (AF_INET == sender.family) {
+        struct sockaddr_in* sock = (struct sockaddr_in*) &sender_sock;
+        sender.port = ntohs(sock->sin_port);
+        memcpy( &(sender.addr.v4), &(sock->sin_addr), IPV4_SIZE );
+    } else if (AF_INET6 == sender.family) {
+        sender.port = ntohs(sender_sock.sin6_port);
+        memcpy( &(sender.addr.v6), &(sender_sock.sin6_addr), IPV6_SIZE );
+    }
 
     /* The packet may not have an orig_sender socket spec. So default to last
      * hop as sender. */
@@ -1829,57 +1836,53 @@ static void startTunReadThread(n2n_edge_t *eee)
  *  REVISIT: This is a really bad idea. The edge will block completely while the
  *           hostname resolution is performed. This could take 15 seconds.
  */
-static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn)
-{
+static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn) {
     n2n_sn_name_t addr;
-	const char *supernode_host;
 
     memcpy( addr, addrIn, N2N_EDGE_SN_HOST_SIZE );
 
-    supernode_host = strtok(addr, ":");
+    char *supernode_port;
+    supernode_port = strrchr(addr, ':');
 
-    if(supernode_host)
-    {
+    if(addr) {
         in_addr_t sn_addr;
-        char *supernode_port = strtok(NULL, ":");
-        const struct addrinfo aihints = {0, PF_INET, 0, 0, 0, NULL, NULL, NULL};
+        
+        const struct addrinfo aihints = { 0,  AF_UNSPEC, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
         struct addrinfo * ainfo = NULL;
         int nameerr;
+        char buffer[INET6_ADDRSTRLEN];
 
         if ( supernode_port )
             sn->port = atoi(supernode_port);
         else
-            traceEvent(TRACE_WARNING, "Bad supernode parameter (-l <host:port>) %s %s:%s",
-                       addr, supernode_host, supernode_port);
+            sn->port = SUPERNODE_PORT;
+        if (sn->port == 0)
+            sn->port = SUPERNODE_PORT;
 
-        nameerr = getaddrinfo( supernode_host, NULL, &aihints, &ainfo );
+        nameerr = getaddrinfo( addr, NULL, &aihints, &ainfo );
 
-        if( 0 == nameerr )
-        {
-            struct sockaddr_in * saddr;
-
-            /* ainfo s the head of a linked list if non-NULL. */
-            if ( ainfo && (PF_INET == ainfo->ai_family) )
-            {
-                /* It is definitely and IPv4 address -> sockaddr_in */
-                saddr = (struct sockaddr_in *)ainfo->ai_addr;
-
-                memcpy( sn->addr.v4, &(saddr->sin_addr.s_addr), IPV4_SIZE );
-                sn->family=AF_INET;
-            }
-            else
-            {
+        if( 0 == nameerr ) {
+            
+            /* ainfo is the head of a linked list if non-NULL. */
+            if (ainfo) {
+                if (PF_INET == ainfo->ai_family) {
+                    struct sockaddr_in* saddr = (struct sockaddr_in*) ainfo->ai_addr;
+                    memcpy( sn->addr.v4, &(saddr->sin_addr), IPV4_SIZE );
+                    sn->family = AF_INET;
+                } else if (PF_INET6 == ainfo->ai_family) {
+                    struct sockaddr_in6 * saddr = (struct sockaddr_in6*) ainfo->ai_addr;
+                    memcpy( sn->addr.v6, &(saddr->sin6_addr), IPV6_SIZE );
+                    sn->family = AF_INET6;
+                }
+            } else {
                 /* Should only return IPv4 addresses due to aihints. */
-                traceEvent(TRACE_WARNING, "Failed to resolve supernode IPv4 address for %s", supernode_host);
+                traceEvent(TRACE_WARNING, "Failed to resolve supernode IP address for %s", addr);
             }
 
             freeaddrinfo(ainfo); /* free everything allocated by getaddrinfo(). */
             ainfo = NULL;
         } else {
-            traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s, assuming numeric", supernode_host);
-            inet_pton(AF_INET, supernode_host, &sn_addr); 
-            memcpy( sn->addr.v4, &(sn_addr), IPV4_SIZE );
-            sn->family=AF_INET;
+            traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %s", addr, gai_strerror(nameerr));
         }
 
     } else
@@ -1964,8 +1967,8 @@ int main(int argc, char* argv[])
     int     got_s = 0;
 
 #ifndef _WIN32
-    uid_t   userid=0; /* root is the only guaranteed ID */
-    gid_t   groupid=0; /* root is the only guaranteed ID */
+    uid_t   userid = 0; /* root is the only guaranteed ID */
+    gid_t   groupid = 0; /* root is the only guaranteed ID */
 #endif
 #ifdef N2N_HAS_CAPABILITIES
     cap_t caps, caps_original;
@@ -2001,16 +2004,18 @@ int main(int argc, char* argv[])
     cap_free(caps_original);
 #endif
 
-    if (-1 == edge_init(&eee) )
-    {
+    if (-1 == edge_init(&eee) ) {
         traceEvent( TRACE_ERROR, "Failed in edge_init" );
         exit(1);
     }
 
     if( getenv( "N2N_KEY" ))
-    {
         encrypt_key = strdup( getenv( "N2N_KEY" ));
-    }
+
+    /* stdout is connected to journald, so don't print time */
+    if ( getenv( "JOURNAL_STREAM" ) )
+        useSystemd = true;
+
 
 #ifdef _WIN32
     tuntap_dev_name[0] = '\0';
@@ -2249,7 +2254,7 @@ int main(int argc, char* argv[])
 #ifdef N2N_HAVE_DAEMON
     if ( eee.daemon )
     {
-        useSyslog=1; /* traceEvent output now goes to syslog. */
+        useSyslog = 1; /* traceEvent output now goes to syslog. */
         prctl(PR_SET_KEEPCAPS, 1L);
         if ( -1 == daemon( 0, 0 ) )
         {
@@ -2338,8 +2343,6 @@ int main(int argc, char* argv[])
     }
 #endif
     
-
-
     if(local_port > 0)
         traceEvent(TRACE_NORMAL, "Binding to local port %d", (signed int)local_port);
 
@@ -2358,7 +2361,7 @@ int main(int argc, char* argv[])
     /* else run in NULL mode */
 
 
-    eee.udp_sock = open_socket(local_port, 1 /*bind ANY*/ );
+    eee.udp_sock = eee.supernode.family == AF_INET ? open_socket(local_port, 1 /*bind ANY*/ ) : open_socket6(local_port, 1 ) ;
     if(eee.udp_sock < 0)
     {
         traceEvent( TRACE_ERROR, "Failed to bind main UDP port %u", (signed int)local_port );
