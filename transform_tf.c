@@ -3,10 +3,6 @@
 #include "n2n.h"
 #include "n2n_transforms.h"
 #include "twofish.h"
-#ifndef _MSC_VER
-/* Not included in Visual Studio 2008 */
-#include <strings.h> /* index() */
-#endif
 
 #define N2N_TWOFISH_NUM_SA              32 /* space for SAa */
 
@@ -278,7 +274,7 @@ static int transop_addspec_twofish( n2n_trans_op_t * arg, const n2n_cipherspec_t
     if ( priv->num_sa < N2N_TWOFISH_NUM_SA )
     {
         const char * op = (const char *)cspec->opaque;
-        const char * sep = index( op, '_' );
+        const char * sep = strchr( op, '_' );
 
         if ( sep )
         {

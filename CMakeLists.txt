@@ -1,9 +1,9 @@
-project(n2n)
-cmake_minimum_required(VERSION 2.6)
+project(n2n C)
+cmake_minimum_required(VERSION 3.0)
 
 # N2n information
 set(N2N_VERSION 2.1.0)
-set(N2N_OSNAME ${CMAKE_SYSTEM})
+set(N2N_OSNAME ${CMAKE_SYSTEM_NAME})
 
 # N2n specific params
 if(NOT DEFINED N2N_OPTION_AES)
@@ -38,25 +38,27 @@ endif(NOT DEFINED CMAKE_BUILD_TYPE)
 #message(${N2N_OPTION_AES})
 ## DEBUG FOR CMAKE
 
-add_library(n2n n2n.c
-                n2n_keyfile.c
-                wire.c
-                minilzo.c
-                twofish.c
-                transform_null.c
-                transform_tf.c
-                transform_aes.c
-                tuntap_freebsd.c
-                tuntap_netbsd.c
-                tuntap_linux.c
-                tuntap_osx.c
-                version.c
-            )
+add_library(n2n OBJECT
+        n2n.c
+        n2n_keyfile.c
+        wire.c
+        minilzo.c
+        twofish.c
+        transform_null.c
+        transform_tf.c
+        transform_aes.c
+        tuntap_freebsd.c
+        tuntap_netbsd.c
+        tuntap_linux.c
+        tuntap_osx.c
+        version.c
+)
+set(OBJECTS $<TARGET_OBJECTS:n2n>)
 
 if(DEFINED WIN32)
 add_subdirectory(win32)
-target_link_libraries(n2n n2n_win32)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477 /wd4267" )
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477 /wd4267")
+set(OBJECTS ${OBJECTS} $<TARGET_OBJECTS:n2n_win32>)
 endif(DEFINED WIN32)
 
 if(N2N_OPTION_AES)
@@ -66,14 +68,12 @@ endif(N2N_OPTION_AES)
 # For Solaris (or OpenSolaris?)
 #target_link_libraries(n2n socket nsl)
 
-add_executable(edge edge.c)
-target_link_libraries(edge n2n)
+add_executable(edge edge.c ${OBJECTS})
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 target_link_libraries(edge cap)
 endif()
 
-add_executable(supernode sn.c)
-target_link_libraries(supernode n2n)
+add_executable(supernode sn.c ${OBJECTS})
 if(DEFINED WIN32)
 # set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")
 endif(DEFINED WIN32)

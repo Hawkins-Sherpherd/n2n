@@ -463,4 +463,3 @@ int sock_equal( const n2n_sock_t * a,
 
     return 0;
 }
-

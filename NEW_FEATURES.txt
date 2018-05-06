@@ -14,5 +14,6 @@ Future:
 * IPv6 for inner and outer transport
 * NetBSD/FreeBSD (might got broken, was never checked)
 * Other Ciphers
-* Better Documentations
+* Better Documentation
 * Code cleanup
+* Windows WSA error codes instead of errno/strerror

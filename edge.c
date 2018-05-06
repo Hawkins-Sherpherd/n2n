@@ -540,12 +540,19 @@ static ssize_t sendto_sock( SOCKET fd, const void * buf, size_t len, const n2n_s
                    (struct sockaddr*) &peer_addr, sizeof(struct sockaddr_in6) );
     if ( sent < 0 )
     {
+#ifdef _WIN32
+        int error = WSAGetLastError();
+        W32_SOCKET_ERROR(error, c)
+        traceEvent( TRACE_ERROR, "sendto failed (%d) %ls", error, c );
+        W32_SOCKET_ERROR_FREE(c)
+#else
         char * c = strerror(errno);
         traceEvent( TRACE_ERROR, "sendto failed (%d) %s", errno, c );
+#endif
     }
     else
     {
-        traceEvent( TRACE_DEBUG, "sendto sent=%d to ", (signed int) sent );
+        traceEvent( TRACE_DEBUG, "sendto sent=%d to", (signed int) sent );
     }
 
     return sent;
@@ -1097,10 +1104,10 @@ static int find_peer_destination(n2n_edge_t * eee,
 
     if ( 0 == retval )
     {
-        memcpy(destination, &(eee->supernode), sizeof(struct sockaddr_in));
+        memcpy(destination, &(eee->supernode), sizeof(n2n_sock_t));
     }
 
-    traceEvent(TRACE_DEBUG, "find_peer_address (%s) -> [%s]",
+    traceEvent(TRACE_DEBUG, "find_peer_address (%s) -> %s",
                macaddr_str( mac_buf, mac_address ),
                sock_to_cstr( sockbuf, destination ) );
 
@@ -1432,7 +1439,13 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 
     if ( recvlen < 0 )
     {
+#ifdef _WIN32
+        W32_SOCKET_ERROR(WSAGetLastError(), c)
+        traceEvent( TRACE_ERROR, "mgmt recvfrom failed with %ls", c );
+        W32_SOCKET_ERROR_FREE(c)
+#else
         traceEvent(TRACE_ERROR, "mgmt recvfrom failed with %s", strerror(errno) );
+#endif
 
         return; /* failed to receive data from UDP */
     }
@@ -1631,14 +1644,20 @@ static void readFromIPSocket( n2n_edge_t * eee )
 
     if ( recvlen < 0 )
     {
+#ifdef _WIN32
+        W32_SOCKET_ERROR(WSAGetLastError(), c)
+        traceEvent( TRACE_ERROR, "recvfrom failed with %ls", c );
+        W32_SOCKET_ERROR_FREE(c)
+#else
         traceEvent(TRACE_ERROR, "recvfrom failed with %s", strerror(errno) );
+#endif
 
         return; /* failed to receive data from UDP */
     }
 
     /* REVISIT: when UDP/IPv6 is supported we will need a flag to indicate which
      * IP transport version the packet arrived on. May need to UDP sockets. */
-    sender.family = sender_sock.sin6_family;
+    sender.family = (uint8_t) sender_sock.sin6_family;
     if (AF_INET == sender.family) {
         struct sockaddr_in* sock = (struct sockaddr_in*) &sender_sock;
         sender.port = ntohs(sock->sin_port);
@@ -1844,13 +1863,10 @@ static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn) {
     char *supernode_port;
     supernode_port = strrchr(addr, ':');
 
-    if(addr) {
-        in_addr_t sn_addr;
-        
+    if(addr) {       
         const struct addrinfo aihints = { 0,  AF_UNSPEC, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
         struct addrinfo * ainfo = NULL;
         int nameerr;
-        char buffer[INET6_ADDRSTRLEN];
 
         if ( supernode_port )
             sn->port = atoi(supernode_port);

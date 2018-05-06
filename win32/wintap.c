@@ -8,24 +8,6 @@
 /* 1500 bytes payload + 14 bytes ethernet header + 4 bytes VLAN tag */
 #define MTU 1518
 
-static void print_windows_message(DWORD rc) {
-    LPVOID lpMsgBuf;
-    if (FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | 
-        FORMAT_MESSAGE_FROM_SYSTEM | 
-        FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL,
-        rc,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-        (LPTSTR) &lpMsgBuf,
-        0,
-        NULL ))
-    {
-        printf("Error: %ls", (WCHAR*) lpMsgBuf);
-    }
-    LocalFree( lpMsgBuf );
-}
-
 void initWin32() {
     WSADATA wsaData;
     int err;
