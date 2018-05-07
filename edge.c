@@ -498,7 +498,7 @@ static void help() {
     printf("-d <tun device>          | tun device name\n");
 #endif
     printf("-a <mode:address>        | Set interface IPv4 address. For DHCP use '-r -a dhcp:0.0.0.0'\n");
-    printf("-A <IPv6>/<prefixlen>    | Set interface IPv6 address, only supported if IPv4 set to 'static'")
+    printf("-A <IPv6>/<prefixlen>    | Set interface IPv6 address, only supported if IPv4 set to 'static'\n");
     printf("-c <community>           | n2n community name the edge belongs to.\n");
     printf("-k <encrypt key>         | Encryption key (ASCII) - also N2N_KEY=<encrypt key>. Not with -K.\n");
     printf("-K <key file>            | Specify a key schedule file to load. Not with -k.\n");

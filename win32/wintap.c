@@ -102,7 +102,6 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 
     inet_ntop(AF_INET6, &device->ip6_addr, ip, INET6_ADDRSTRLEN);
     _snwprintf(netsh, 1024, L"interface ipv6 set address %s %hs/%hu", if_name, ip, device->ip6_prefixlen);
-    printf("%ls\n", netsh);
     memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
 
     shex.cbSize       = sizeof( SHELLEXECUTEINFO );
