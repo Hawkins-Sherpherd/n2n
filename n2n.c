@@ -167,38 +167,6 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
 
 /* *********************************************** */
 
-/* addr should be in network order. Things are so much simpler that way. */
-char* intoa(uint32_t /* host order */ addr, char* buf, uint16_t buf_len) {
-    char *cp, *retStr;
-    uint8_t byteval;
-    int n;
-
-    cp = &buf[buf_len];
-    *--cp = '\0';
-
-    n = 4;
-    do {
-        byteval = addr & 0xff;
-        *--cp = byteval % 10 + '0';
-        byteval /= 10;
-        if (byteval > 0) {
-        *--cp = byteval % 10 + '0';
-        byteval /= 10;
-        if (byteval > 0)
-            *--cp = byteval + '0';
-        }
-        *--cp = '.';
-        addr >>= 8;
-    } while (--n > 0);
-
-    /* Convert the string to lowercase */
-    retStr = (char*)(cp+1);
-
-    return(retStr);
-}
-
-/* *********************************************** */
-
 char * macaddr_str( macstr_t buf,
                     const n2n_mac_t mac )
 {
@@ -396,50 +364,23 @@ size_t clear_peer_list( struct peer_info ** peer_list )
     return retval;
 }
 
-static uint8_t hex2byte( const char * s )
-{
-  return((uint8_t)strtol( s, NULL, 16 ));
-}
-
-extern int str2mac( uint8_t * outmac /* 6 bytes */, const char * s )
-{
-  size_t i;
-
-  /* break it down as one case for the first "HH", the 5 x through loop for
-   * each ":HH" where HH is a two hex nibbles in ASCII. */
-
-  *outmac=hex2byte(s);
-  ++outmac;
-  s+=2; /* don't skip colon yet - helps generalise loop. */
-
-  for (i=1; i<6; ++i )
-    {
-      s+=1;
-      *outmac=hex2byte(s);
-      ++outmac;
-      s+=2;
-    }
-
-  return 0; /* ok */
-}
-
 extern char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock )
 {
-    char buffer[INET6_ADDRSTRLEN];
+    ipstr_t buffer;
 
     if ( NULL == out ) { return NULL; }
     memset(out, 0, N2N_SOCKBUF_SIZE);
 
     if ( AF_INET6 == sock->family )
     {
-        inet_ntop(AF_INET6, &sock->addr, buffer, INET6_ADDRSTRLEN);
+        inet_ntop(AF_INET6, &sock->addr, buffer, sizeof(buffer));
         snprintf( out, N2N_SOCKBUF_SIZE, "[%s]:%hu", buffer, sock->port );
         return out;
     }
     else
     {
-        inet_ntop(AF_INET, &sock->addr, buffer, INET_ADDRSTRLEN);
+        inet_ntop(AF_INET, &sock->addr, buffer, sizeof(buffer));
         snprintf( out, N2N_SOCKBUF_SIZE, "%s:%hu", buffer, sock->port );
         return out;
     }

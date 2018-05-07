@@ -1205,7 +1205,7 @@ static void send_packet2net(n2n_edge_t * eee,
 
     /* Discard IP packets that are not originated by this hosts */
     if(!(eee->allow_routing)) {
-        if(ntohs(eh.type) == 0x0800) {
+        if(htons(0x0800) == eh.type) {
             /* This is an IP packet from the local source address - not forwarded. */
 #define ETH_FRAMESIZE 14
 #define IP4_SRCOFFSET 12
@@ -1215,11 +1215,22 @@ static void send_packet2net(n2n_edge_t * eee,
             if( *dst != eee->device.ip_addr) {
                 /* This is a packet that needs to be routed */
                 traceEvent(TRACE_INFO, "Discarding routed packet [%s]",
-                                intoa(ntohl(*dst), ip_buf, sizeof(ip_buf)));
+                           inet_ntop(AF_INET, dst, ip_buf, sizeof(ip_buf)));
                 return;
             } else {
                 /* This packet is originated by us */
                 /* traceEvent(TRACE_INFO, "Sending non-routed packet"); */
+            }
+        } else if(htons(0x86dd) == eh.type) {
+            /* IPv6 package */
+#define IP6_SRCOFFSET 8
+            struct in6_addr* dst = (struct in6_addr *)&tap_pkt[ETH_FRAMESIZE + IP6_SRCOFFSET];
+            if( memcmp(dst, &eee->device.ip6_addr, IPV6_SIZE ) != 0 ) {
+                traceEvent(TRACE_INFO, "Discarding routed packet [%s]",
+                           inet_ntop(AF_INET6, dst, ip_buf, sizeof(ip_buf)));
+                return;
+            } else {
+
             }
         }
     }
@@ -1963,6 +1974,58 @@ static int scan_address( char * ip_addr, size_t addr_size,
     return retval;
 }
 
+/** IP6 Address for TUNTAP device
+ * 
+ * s should be in the form of:
+ * 
+ * aa:bb:cc:ee::01
+ * 
+ * or
+ * 
+ * aa:bb:cc:ee::01/48
+ * 
+ * where 48 is the prefix length (netmask lenth), if not
+ * provided, the string is not changed.
+ */
+static int scan_address6( char * ip6_addr, size_t addr_size,
+                          char * ip6_prefixlen, size_t prefix_size,
+                          const char * s )
+{
+    int retval = -1;
+    char * p;
+
+    if ( ( NULL == s ) || ( NULL == ip6_addr) )
+    {
+        return -1;
+    }
+
+    memset(ip6_addr, 0, addr_size);
+
+    p = strchr(s, '/');
+
+    if ( p )
+    {
+        /* colon is present */
+        if ( ip6_prefixlen )
+        {
+            size_t end=0;
+
+            memset(ip6_prefixlen, 0, prefix_size);
+            end = MIN( p-s, (ssize_t)(addr_size-1) ); /* ensure NULL term */
+            strncpy( ip6_addr, s, end );
+            strncpy( ip6_prefixlen, p+1, prefix_size-1 ); /* ensure NULL term */
+            retval = 0;
+        }
+    }
+    else
+    {
+        /* colon is not present */
+        strncpy( ip6_addr, s, addr_size );
+    }
+
+    return retval;
+}
+
 static int run_loop(n2n_edge_t * eee );
 
 #define N2N_NETMASK_STR_SIZE    16 /* dotted decimal 12 numbers + 3 dots */
@@ -1977,10 +2040,13 @@ int main(int argc, char* argv[])
     int     mgmt_port = N2N_EDGE_MGMT_PORT; /* 5644 by default */
     char    tuntap_dev_name[N2N_IFNAMSIZ] = "edge0";
     char    ip_mode[N2N_IF_MODE_SIZE]="static";
-    char    ip_addr[N2N_NETMASK_STR_SIZE] = "";
-    char    netmask[N2N_NETMASK_STR_SIZE]="255.255.255.0";
+    ipstr_t ip_addr = "";
+    ipstr_t netmask = "255.255.255.0";
+    ipstr_t ip6_addr = "";
+    char    ip6_prefixlen[] = "64   "; /* add some space to be safe */
     int     mtu = DEFAULT_MTU;
     int     got_s = 0;
+    struct tuntap_config tuntap_config;
 
 #ifndef _WIN32
     uid_t   userid = 0; /* root is the only guaranteed ID */
@@ -2028,7 +2094,7 @@ int main(int argc, char* argv[])
     if( getenv( "N2N_KEY" ))
         encrypt_key = strdup( getenv( "N2N_KEY" ));
 
-    /* stdout is connected to journald, so don't print time */
+    /* stdout is connected to journald, so don't print data/time */
     if ( getenv( "JOURNAL_STREAM" ) )
         useSystemd = true;
 
@@ -2036,6 +2102,8 @@ int main(int argc, char* argv[])
 #ifdef _WIN32
     tuntap_dev_name[0] = '\0';
 #endif
+    memset(&tuntap_config, 0, sizeof(tuntap_config));
+
     memset(&(eee.supernode), 0, sizeof(eee.supernode));
     eee.supernode.family = AF_INET;
 
@@ -2087,7 +2155,7 @@ int main(int argc, char* argv[])
     optarg = NULL;
     while((opt = getopt_long(effectiveargc,
                              effectiveargv,
-                             "K:k:a:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL)) != EOF)
+                             "K:k:a:A:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL)) != EOF)
     {
         switch (opt)
         {
@@ -2111,6 +2179,13 @@ int main(int argc, char* argv[])
             scan_address(ip_addr, N2N_NETMASK_STR_SIZE,
                          ip_mode, N2N_IF_MODE_SIZE,
                          optarg );
+            break;
+        }
+        case 'A': /* IP address and mode of TUNTAP interface */
+        {
+            scan_address6(ip6_addr, INET6_ADDRSTRLEN,
+                          ip6_prefixlen, 3,
+                          optarg );
             break;
         }
         case 'c': /* community as a string */
@@ -2327,6 +2402,42 @@ int main(int argc, char* argv[])
         traceEvent(TRACE_NORMAL, "ip_mode='%s'", ip_mode);        
     }
 
+    tuntap_config.if_name = tuntap_dev_name;
+    if (device_mac[0] != '\0') {
+        if (6 != sscanf(device_mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+            &tuntap_config.device_mac[0],
+            &tuntap_config.device_mac[1],
+            &tuntap_config.device_mac[2],
+            &tuntap_config.device_mac[3],
+            &tuntap_config.device_mac[4],
+            &tuntap_config.device_mac[5]
+        )) {
+            traceEvent(TRACE_ERROR, "not valid mac address: %s", device_mac);
+        }
+        if ( 1 == (tuntap_config.device_mac[0] % 2) ) {
+            traceEvent(TRACE_ERROR, "not a valid singlecast mac address: %s (first octet is uneven)", device_mac);
+        }
+    }
+    tuntap_config.mtu = mtu;
+    tuntap_config.dyn_ip4 = eee.dyn_ip_mode;
+    if (inet_pton(AF_INET, ip_addr, &tuntap_config.ip_addr) != 1) {
+         traceEvent(TRACE_ERROR, "invalid ipv4 address: %s", ip_addr);
+    }
+    if (inet_pton(AF_INET, netmask, &tuntap_config.netmask) != 1) {
+        traceEvent(TRACE_ERROR, "invalid ipv4 netmask: %s", netmask);
+        /* TODO: validate */
+    }
+    
+    if (ip6_addr[0] == '\0')
+        tuntap_config.ip6_prefixlen = 0;
+    else {    
+        if (inet_pton(AF_INET6, ip6_addr, &tuntap_config.ip6_addr) != 1) {
+            traceEvent(TRACE_ERROR, "invalid ipv6 address: %s", ip6_addr);
+        }
+        /* TODO: error check */
+        tuntap_config.ip6_prefixlen = strtol(ip6_prefixlen, NULL, 10);
+    }
+
 #if defined(N2N_HAS_CAPABILITIES)
     /* set effective capabilitiy NET_ADMIN */
     caps = cap_init();
@@ -2340,7 +2451,7 @@ int main(int argc, char* argv[])
     /* setgid( 0 ); */
 #endif
 
-    if(tuntap_open(&(eee.device), tuntap_dev_name, ip_mode, ip_addr, netmask, device_mac, mtu) < 0)
+    if(tuntap_open(&(eee.device), &tuntap_config) < 0)
         return(-1);
 
 #if defined(N2N_HAS_CAPABILITIES)

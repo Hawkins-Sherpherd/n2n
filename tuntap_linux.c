@@ -20,49 +20,41 @@
 #ifdef __linux__
 #include <net/if_arp.h>
 
-static void read_mac(char *ifname, n2n_mac_t mac_addr) {
+struct in6_ifreq {
+    struct in6_addr ifr6_addr;
+    uint32_t ifr6_prefixlen;
+    unsigned int ifr6_ifindex;
+};
+
+static void read_mac(const char *ifname, n2n_mac_t mac_addr) {
     int _sock, res;
     struct ifreq ifr;
     macstr_t mac_addr_buf;
 
-    memset (&ifr,0,sizeof(struct ifreq));
+    memset(&ifr, 0, sizeof(struct ifreq));
 
     _sock = socket(PF_INET, SOCK_DGRAM, 0);
-    strcpy(ifr.ifr_name, ifname);
-    res = ioctl(_sock,SIOCGIFHWADDR,&ifr);
+    strncpy(ifr.ifr_name, ifname, N2N_IFNAMSIZ);
+
+    res = ioctl(_sock, SIOCGIFHWADDR, &ifr);
     if (res < 0) {
-        perror ("Get hw addr");
+        traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), res);
     } else
-        memcpy(mac_addr, ifr.ifr_ifru.ifru_hwaddr.sa_data, 6);
+        memcpy(mac_addr, &ifr.ifr_ifru.ifru_hwaddr.sa_data, sizeof(n2n_mac_t));
 
     traceEvent(TRACE_NORMAL, "Interface %s has MAC %s",
                ifname,
-               macaddr_str(mac_addr_buf, mac_addr ));
+               macaddr_str(mac_addr_buf, mac_addr));
     close(_sock);
 }
 
-static int set_mac(int fd, const char* dev, const char* device_mac) {
+static int set_mac(int fd, const char* dev, n2n_mac_t device_mac) {
     int rc;
     struct ifreq ifr;
 
     memset(&ifr, 0, sizeof(struct ifreq));
-    if (6 != sscanf(device_mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-        &ifr.ifr_hwaddr.sa_data[0],
-        &ifr.ifr_hwaddr.sa_data[1],
-        &ifr.ifr_hwaddr.sa_data[2],
-        &ifr.ifr_hwaddr.sa_data[3],
-        &ifr.ifr_hwaddr.sa_data[4],
-        &ifr.ifr_hwaddr.sa_data[5]
-    )) {
-        traceEvent(TRACE_ERROR, "not a valid mac address: %s\n", device_mac);
-        return -1;
-    }
+    memcpy(&ifr.ifr_hwaddr.sa_data, device_mac, sizeof(n2n_mac_t));
     strncpy(ifr.ifr_name, dev, IFNAMSIZ);
-    
-    if ( 1 == (ifr.ifr_hwaddr.sa_data[0] % 2) ) {
-        traceEvent(TRACE_ERROR, "not a valid singlecast mac address: %s (first octet is uneven)\n", device_mac);
-        return -1;
-    }
     
     ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
     rc = ioctl(fd, SIOCSIFHWADDR, &ifr);
@@ -70,21 +62,22 @@ static int set_mac(int fd, const char* dev, const char* device_mac) {
         traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
         return -1;
     }
-
     return 0;
 }
 
 static int set_ipaddress(const tuntap_dev* device, int static_address) {
-    int _sock, rc;
+    int _sock, _sock_in6, rc;
     struct ifreq ifr;
+    struct in6_ifreq ifr6;
 
-    memset(&ifr, 0, sizeof(struct ifreq));
-    _sock = socket(PF_INET, SOCK_DGRAM, 0);
+   
+    _sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (_sock < 0) {
-        traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), _sock);
+        traceEvent(TRACE_ERROR, "socket() [%s][%d]\n", strerror(errno), _sock);
         return -1;
     }
 
+    memset(&ifr, 0, sizeof(struct ifreq));
     strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
 
     /* set MTU */
@@ -97,17 +90,20 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
     }
 
     /* set ipv4 address */
-    ifr.ifr_addr.sa_family = AF_INET;
-    ((struct sockaddr_in*) &ifr.ifr_addr)->sin_addr.s_addr = device->ip_addr;
-   
-    rc = ioctl(_sock, SIOCSIFADDR, &ifr);
-    if (rc < 0) {
-        traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
-        close(_sock);
-        return -1;
-    }
-
     if (static_address) {
+        memset(&ifr, 0, sizeof(struct ifreq));
+        strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
+
+        ifr.ifr_addr.sa_family = AF_INET;
+        ((struct sockaddr_in*) &ifr.ifr_addr)->sin_addr.s_addr = device->ip_addr;
+   
+        rc = ioctl(_sock, SIOCSIFADDR, &ifr);
+        if (rc < 0) {
+            traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
+            close(_sock);
+            return -1;
+        }
+
         /* set netmask */
         ifr.ifr_addr.sa_family = AF_INET;
         ((struct sockaddr_in*) &ifr.ifr_addr)->sin_addr.s_addr = device->device_mask;
@@ -118,7 +114,43 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
             close(_sock);
             return -1;
         }
+
     }
+
+    /* set ipv6 address */
+    if (static_address && device->ip6_prefixlen > 0) {
+        _sock_in6 = socket(PF_INET6, SOCK_DGRAM, IPPROTO_IP);
+
+        /* get the interface number */
+        memset(&ifr, 0, sizeof(struct ifreq));
+        strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
+        rc = ioctl(_sock_in6, SIOGIFINDEX, &ifr);
+        if (rc < 0) {
+            traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
+            close(_sock_in6);
+            close(_sock);
+            return -1;
+        }
+   
+        /* set address and prefix */
+        memset(&ifr6, 0, sizeof(ifr6));
+        struct in6_addr* in6_addr = (struct in6_addr*) &ifr6.ifr6_addr;
+        memcpy(in6_addr, &device->ip6_addr, IPV6_SIZE);
+        ifr6.ifr6_prefixlen = device->ip6_prefixlen;
+        ifr6.ifr6_ifindex = ifr.ifr_ifindex;
+        rc = ioctl(_sock_in6, SIOCSIFADDR, &ifr6);
+        if (rc < 0) {
+            traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
+            close(_sock_in6);
+            close(_sock);
+            return -1;
+        }
+
+        close(_sock_in6);
+    }
+    
+    memset(&ifr, 0, sizeof(struct ifreq));
+    strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
 
     /* retrieve flags */
     rc = ioctl(_sock, SIOCGIFFLAGS, &ifr);
@@ -159,13 +191,7 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
  *  @return - negative value on error
  *          - non-negative file-descriptor on success
  */
-int tuntap_open(tuntap_dev *device, 
-                char *dev, /* user-definable interface name, eg. edge0 */
-                const char *address_mode, /* static or dhcp */
-                char *device_ip, 
-                char *device_mask,
-                const char * device_mac,
-                int mtu) {
+int tuntap_open(tuntap_dev *device, struct tuntap_config* config) {
     char *tuntap_device = "/dev/net/tun";
     struct ifreq ifr;
     int rc;
@@ -178,7 +204,7 @@ int tuntap_open(tuntap_dev *device,
 
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP|IFF_NO_PI; /* Want a TAP device for layer 2 frames. */
-    strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+    strncpy(ifr.ifr_name, config->if_name, IFNAMSIZ);
     rc = ioctl(device->fd, TUNSETIFF, (void *)&ifr);
 
     if(rc < 0) {
@@ -188,30 +214,27 @@ int tuntap_open(tuntap_dev *device,
     }
 
     /* set mac address */
-    if (device_mac && device_mac[0] != '\0') {
-        set_mac(device->fd, dev, device_mac);
+    if (!(config->device_mac[0] == 0 && config->device_mac[1] == 0 &&
+          config->device_mac[2] == 0 && config->device_mac[3] == 0 &&
+          config->device_mac[4] == 0 && config->device_mac[5] == 0))
+    {
+        set_mac(device->fd, config->if_name, config->device_mac);
     }
 
     /* Store the device name for later reuse */
-    strncpy(device->dev_name, ifr.ifr_name, MIN(IFNAMSIZ, N2N_IFNAMSIZ) );
+    strncpy(device->dev_name, config->if_name, MIN(IFNAMSIZ, N2N_IFNAMSIZ) );
 
-    if (0 == inet_pton(AF_INET, device_ip, &device->ip_addr)) {
-        traceEvent(TRACE_ERROR, "invalid ipv4 address: %s\n", device_ip);
-        close(device->fd);
-        return -1;
-    }
-    if (0 == inet_pton(AF_INET, device_mask, &device->device_mask)) {
-        traceEvent(TRACE_ERROR, "invalid netmask: %s\n", device_mask);
-        close(device->fd);
-        return -1;
-    }
-    
-    device->mtu = mtu;
+    memcpy(&device->ip_addr, &config->ip_addr, sizeof(config->ip_addr));
+    memcpy(&device->device_mask, &config->netmask, sizeof(config->netmask));
+    memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
 
-    read_mac(dev, device->mac_addr);
+    device->ip6_prefixlen = config->ip6_prefixlen;
+    device->mtu = config->mtu;
 
-    if ( set_ipaddress(device, strncmp("dhcp", address_mode, 5) != 0) < 0 ) {
-        traceEvent(TRACE_ERROR, "Could not setup up interface %s", dev);
+    read_mac(device->dev_name, device->mac_addr);
+
+    if ( set_ipaddress(device, !config->dyn_ip4) < 0 ) {
+        traceEvent(TRACE_ERROR, "Could not setup up interface %s", device->dev_name);
         close(device->fd);
         return -1;
     }
@@ -236,10 +259,14 @@ void tuntap_close(struct tuntap_dev *tuntap) {
 void tuntap_get_address(struct tuntap_dev *tuntap) {
     int _sock, res;
     struct ifreq ifr;
-    char buf[16];
+    ipstr_t buf;
 
+    memset(&ifr, 0, sizeof(ifr));
     _sock = socket(PF_INET, SOCK_DGRAM, 0);
+
     strcpy(ifr.ifr_name, tuntap->dev_name);
+    ifr.ifr_addr.sa_family = AF_INET;
+    
     res = ioctl(_sock, SIOCGIFADDR, &ifr);
     if (res < 0) {
         perror ("Get ip addr");
@@ -247,9 +274,9 @@ void tuntap_get_address(struct tuntap_dev *tuntap) {
         tuntap->ip_addr = ((struct sockaddr_in*) &ifr.ifr_addr)->sin_addr.s_addr;
     close(_sock);
 
-    traceEvent(TRACE_NORMAL, "Interface %s has IP %s",
+    traceEvent(TRACE_NORMAL, "Interface %s has IPv4 %s",
                tuntap->dev_name,
-               inet_ntop(AF_INET, &tuntap->ip_addr, buf, 16));
+               inet_ntop(AF_INET, &tuntap->ip_addr, buf, sizeof(buf)));
 }
 
 #endif /* #ifdef __linux__ */

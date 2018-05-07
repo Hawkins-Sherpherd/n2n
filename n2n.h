@@ -128,15 +128,31 @@ typedef struct ether_hdr ether_hdr_t;
 #define N2N_IFNAMSIZ            16 /* 15 chars * NULL */
 #ifndef _WIN32
 typedef struct tuntap_dev {
-  int           fd;
-  uint8_t       mac_addr[6];
-  uint32_t      ip_addr, device_mask;
-  uint16_t      mtu;
-  char          dev_name[N2N_IFNAMSIZ];
+  int             fd;
+  uint8_t         mac_addr[6];
+  uint32_t        ip_addr, device_mask;
+  struct in6_addr ip6_addr;
+  uint8_t         ip6_prefixlen;
+  uint16_t        mtu;
+  char            dev_name[N2N_IFNAMSIZ];
 } tuntap_dev;
 
 #define SOCKET int
 #endif /* #ifndef _WIN32 */
+
+struct tuntap_config {
+    /* device configuration */
+    char* if_name;
+    n2n_mac_t device_mac;
+    int mtu;
+    /* ipv4 configuration */
+    bool dyn_ip4;
+    in_addr_t ip_addr;
+    in_addr_t netmask;
+    /* ipv6 configuration */
+    struct in6_addr ip6_addr;
+    uint8_t ip6_prefixlen;
+};
 
 #define QUICKLZ               1
 
@@ -159,7 +175,7 @@ typedef struct tuntap_dev {
 #define DEFAULT_MTU   1400
 
 /** Common type used to hold stringified IP addresses. */
-typedef char ipstr_t[32];
+typedef char ipstr_t[INET6_ADDRSTRLEN];
 
 /** Common type used to hold stringified MAC addresses. */
 #define N2N_MACSTR_SIZE 32
@@ -212,8 +228,7 @@ extern const uint8_t multicast_addr[6];
 
 /* Functions */
 extern void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...);
-extern int  tuntap_open(tuntap_dev *device, char *dev, const char *address_mode, char *device_ip, 
-			char *device_mask, const char * device_mac, int mtu);
+extern int  tuntap_open(tuntap_dev *device, struct tuntap_config* tuntap_config);
 extern ssize_t tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
 extern ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
 extern void tuntap_close(struct tuntap_dev *tuntap);
@@ -222,9 +237,7 @@ extern void tuntap_get_address(struct tuntap_dev *tuntap);
 extern SOCKET open_socket(int local_port, int bind_any);
 extern SOCKET open_socket6(int local_port, int bind_any);
 
-extern char* intoa(uint32_t addr, char* buf, uint16_t buf_len);
 extern char* macaddr_str(macstr_t buf, const n2n_mac_t mac);
-extern int   str2mac( uint8_t * outmac /* 6 bytes */, const char * s );
 extern char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock );
 
