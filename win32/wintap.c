@@ -79,17 +79,17 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 #endif
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
     WCHAR windows_path[64], cmd[128], netsh[256];
-    char ip[16], mask[16];
+    char ip[INET6_ADDRSTRLEN], mask[INET_ADDRSTRLEN];
     SHELLEXECUTEINFO shex;
     DWORD rc;
 
     ConvertInterfaceLuidToNameW(&device->luid, if_name, MAX_ADAPTER_NAME_LENGTH);
     GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
-    inet_ntop(AF_INET, &device->ip_addr, ip, 16);
-    inet_ntop(AF_INET, &device->device_mask, mask, 16);
+    inet_ntop(AF_INET, &device->ip_addr, ip, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, &device->device_mask, mask, INET_ADDRSTRLEN);
 
     _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
-    _snwprintf(netsh, 1024, L"interface ip set address %s static %hs %hs", if_name, ip, mask);
+    _snwprintf(netsh, 1024, L"interface ipv4 set address %s static %hs %hs", if_name, ip, mask);
     memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
 
     shex.cbSize       = sizeof( SHELLEXECUTEINFO );
@@ -100,22 +100,29 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 
     rc = ShellExecuteEx(&shex);
 
-    // print_windows_message(GetLastError());
+    inet_ntop(AF_INET6, &device->ip6_addr, ip, INET6_ADDRSTRLEN);
+    _snwprintf(netsh, 1024, L"interface ipv6 set address %s %hs/%hu", if_name, ip, device->ip6_prefixlen);
+    printf("%ls\n", netsh);
+    memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
+
+    shex.cbSize       = sizeof( SHELLEXECUTEINFO );
+    shex.fMask        = SEE_MASK_NO_CONSOLE | SEE_MASK_NOASYNC;
+    shex.lpVerb       = L"runas";
+    shex.lpFile       = cmd;
+    shex.lpParameters = netsh;
+
+    rc = ShellExecuteEx(&shex);
 
     return 0;
 }
 
-int open_wintap(struct tuntap_dev *device,
-                const char * address_mode, /* "static" or "dhcp" */
-                char *device_ip,
-                char *device_mask,
-                const char *device_mac, 
-                int mtu) {
+int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     HKEY key, key2;
     LONG rc;
     WCHAR regpath[1024];
     WCHAR adapterid[1024];
     WCHAR tapname[1024];
+    char ip_address[INET6_ADDRSTRLEN];
     long len;
     int found = 0;
     int i;
@@ -125,26 +132,19 @@ int open_wintap(struct tuntap_dev *device,
     device->device_handle = INVALID_HANDLE_VALUE;
     device->device_name = NULL;
     device->ifIdx = NET_IFINDEX_UNSPECIFIED;
+
     memset(&device->luid, 0, sizeof(NET_LUID));
 
-    if (inet_pton(AF_INET, device_ip, &device->ip_addr) != 1) {
-        printf("device ip is not a valid IP address\n");
-        exit(-1);
-    }
-
-    if (inet_pton(AF_INET, device_mask, &device->device_mask) != 1) {
-        printf("net mask is not a valid\n");
-        exit(-1);
-    }
+    memcpy(&device->ip_addr, &config->ip_addr, sizeof(config->ip_addr));
+    memcpy(&device->device_mask, &config->netmask, sizeof(config->netmask));
+    memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
+    device->ip6_prefixlen = config->ip6_prefixlen;
+    device->mtu = config->mtu;
 
     /* Open registry and look for network adapters */
     if((rc = RegOpenKeyEx(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &key))) {
         printf("Unable to read registry: [rc=%d]\n", rc);
         exit(-1);
-        /* MSVC Note: If you keep getting rc=2 errors, make sure you set:
-         * Project -> Properties -> Configuration Properties -> General -> Character set
-         * to: "Use Multi-Byte Character Set"
-         */
     }
 
     for (i = 0; ; i++) {
@@ -167,7 +167,7 @@ int open_wintap(struct tuntap_dev *device,
                 continue;
         }
 
-        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAP_WIN_SUFFIX, adapterid);
+        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR L"%s" TAP_WIN_SUFFIX, adapterid);
         device->device_handle = CreateFile(tapname, GENERIC_WRITE | GENERIC_READ,
                                            0, /* Don't let other processes share or open the resource until the handle's been closed */
                                            0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
@@ -219,10 +219,10 @@ int open_wintap(struct tuntap_dev *device,
         return -1;
     }
 
-    device->mtu = mtu;
-
     printf("Open device [name=%ls][ip=%s][ifIdx=%u][MTU=%d][mac=%02X:%02X:%02X:%02X:%02X:%02X]\n",
-           device->device_name, device_ip, device->ifIdx, device->mtu,
+           device->device_name,
+           inet_ntop(AF_INET, &device->ip_addr, (PSTR) &ip_address, INET_ADDRSTRLEN),
+           device->ifIdx, device->mtu,
            device->mac_addr[0] & 0xFF,
            device->mac_addr[1] & 0xFF,
            device->mac_addr[2] & 0xFF,
@@ -234,7 +234,7 @@ int open_wintap(struct tuntap_dev *device,
 
     printf("Setting %ls device address...\n", device->device_name);
 
-    if ( 0 == strcmp("dhcp", address_mode) )
+    if (config->dyn_ip4)
     {
         rc = set_dhcp(device);
     }
@@ -327,19 +327,11 @@ ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) 
 
 /* ************************************************ */
 
-int tuntap_open(struct tuntap_dev *device,
-                char *dev,
-                const char *address_mode, /* static or dhcp */
-                char *device_ip,
-                char *device_mask,
-                const char * device_mac,
-                int mtu) {
-    return(open_wintap(device, address_mode, device_ip, device_mask, device_mac, mtu));
-}
-
-/* ************************************************ */
-
 void tuntap_close(struct tuntap_dev *tuntap) {
+    if (tuntap->device_name) {
+        free( tuntap->device_name );
+        tuntap->device_name = NULL;
+    }
     CloseHandle(tuntap->device_handle);
 }
 

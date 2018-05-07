@@ -228,7 +228,7 @@ extern const uint8_t multicast_addr[6];
 
 /* Functions */
 extern void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...);
-extern int  tuntap_open(tuntap_dev *device, struct tuntap_config* tuntap_config);
+extern int  tuntap_open(tuntap_dev *device, struct tuntap_config* config);
 extern ssize_t tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
 extern ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len);
 extern void tuntap_close(struct tuntap_dev *tuntap);

@@ -467,61 +467,67 @@ static void readFromIPSocket( n2n_edge_t * eee );
 static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running );
 
 static void help() {
-  print_n2n_version();
+    print_n2n_version();
 
-  printf("edge "
+    printf("edge "
 #if defined(N2N_CAN_NAME_IFACE)
-	 "-d <tun device> "
+        "-d <tun device> "
 #endif /* #if defined(N2N_CAN_NAME_IFACE) */
-	 "-a [static:|dhcp:]<tun IP address> "
-	 "-c <community> "
-	 "[-k <encrypt key> | -K <key file>] "
-	 "[-s <netmask>] "
+	    "-a [static:|dhcp:]<tun IP address> "
+	    "-c <community> "
+	    "[-k <encrypt key> | -K <key file>] "
+	    "[-s <netmask>] "
 #if defined(N2N_HAVE_SETUID)
-	 "[-u <uid> -g <gid>]"
+	    "[-u <uid> -g <gid>]"
 #endif /* #ifndef N2N_HAVE_SETUID */
 
 #if defined(N2N_HAVE_DAEMON)
-	 "[-f]"
+	    "[-f]"
 #endif /* #if defined(N2N_HAVE_DAEMON) */
-	 "[-m <MAC address>]"
-	 "\n"
-	 "-l <supernode host:port> "
-	 "[-p <local port>] [-M <mtu>] "
-	 "[-r] [-E] [-v] [-t <mgmt port>] [-b] [-h]\n\n");
-
-#ifdef __linux__
-  printf("-d <tun device>          | tun device name\n");
-#endif
-
-  printf("-a <mode:address>        | Set interface address. For DHCP use '-r -a dhcp:0.0.0.0'\n");
-  printf("-c <community>           | n2n community name the edge belongs to.\n");
-  printf("-k <encrypt key>         | Encryption key (ASCII) - also N2N_KEY=<encrypt key>. Not with -K.\n");
-  printf("-K <key file>            | Specify a key schedule file to load. Not with -k.\n");
-  printf("-s <netmask>             | Edge interface netmask in dotted decimal notation (255.255.255.0).\n");
-  printf("-l <supernode host:port> | Supernode IP:port\n");
-  printf("-b                       | Periodically resolve supernode IP\n");
-  printf("                         : (when supernodes are running on dynamic IPs)\n");
-  printf("-p <local port>          | Fixed local UDP port.\n");
 #ifndef _WIN32
-  printf("-u <UID>                 | User ID (numeric) to use when privileges are dropped.\n");
-  printf("-g <GID>                 | Group ID (numeric) to use when privileges are dropped.\n");
+	    "[-m <MAC address>]"
+#endif
+	    "\n"
+	    "-l <supernode host:port> "
+	    "[-p <local port>] "
+#ifndef _WIN32
+        "[-M <mtu>] "
+#endif
+	    "[-r] [-E] [-v] [-t <mgmt port>] [-b] [-h]\n\n");
+#ifdef __linux__
+    printf("-d <tun device>          | tun device name\n");
+#endif
+    printf("-a <mode:address>        | Set interface IPv4 address. For DHCP use '-r -a dhcp:0.0.0.0'\n");
+    printf("-A <IPv6>/<prefixlen>    | Set interface IPv6 address, only supported if IPv4 set to 'static'")
+    printf("-c <community>           | n2n community name the edge belongs to.\n");
+    printf("-k <encrypt key>         | Encryption key (ASCII) - also N2N_KEY=<encrypt key>. Not with -K.\n");
+    printf("-K <key file>            | Specify a key schedule file to load. Not with -k.\n");
+    printf("-s <netmask>             | Edge interface netmask in dotted decimal notation (255.255.255.0).\n");
+    printf("-l <supernode host:port> | Supernode IP:port\n");
+    printf("-b                       | Periodically resolve supernode IP\n");
+    printf("                         : (when supernodes are running on dynamic IPs)\n");
+    printf("-p <local port>          | Fixed local UDP port.\n");
+#ifndef _WIN32
+    printf("-u <UID>                 | User ID (numeric) to use when privileges are dropped.\n");
+    printf("-g <GID>                 | Group ID (numeric) to use when privileges are dropped.\n");
 #endif /* ifndef _WIN32 */
 #ifdef N2N_HAVE_DAEMON
-  printf("-f                       | Do not fork and run as a daemon; rather run in foreground.\n");
+    printf("-f                       | Do not fork and run as a daemon; rather run in foreground.\n");
 #endif /* #ifdef N2N_HAVE_DAEMON */
-  printf("-m <MAC address>         | Fix MAC address for the TAP interface (otherwise it may be random)\n"
-         "                         : eg. -m 01:02:03:04:05:06\n");
-  printf("-M <mtu>                 | Specify n2n MTU of edge interface (default %d).\n", DEFAULT_MTU);
-  printf("-r                       | Enable packet forwarding through n2n community.\n");
-  printf("-E                       | Accept multicast MAC addresses (default=drop).\n");
-  printf("-v                       | Make more verbose. Repeat as required.\n");
-  printf("-t                       | Management UDP Port (for multiple edges on a machine).\n");
+#ifndef _WIN32
+    printf("-m <MAC address>         | Fix MAC address for the TAP interface (otherwise it may be random)\n"
+           "                         : eg. -m 01:02:03:04:05:06\n");
+    printf("-M <mtu>                 | Specify n2n MTU of edge interface (default %d).\n", DEFAULT_MTU);
+#endif
+    printf("-r                       | Enable packet forwarding through n2n community.\n");
+    printf("-E                       | Accept multicast MAC addresses (default=drop).\n");
+    printf("-v                       | Make more verbose. Repeat as required.\n");
+    printf("-t                       | Management UDP Port (for multiple edges on a machine).\n");
 
-  printf("\nEnvironment variables:\n");
-  printf("  N2N_KEY                | Encryption key (ASCII). Not with -K or -k.\n" );
+    printf("\nEnvironment variables:\n");
+    printf("  N2N_KEY                | Encryption key (ASCII). Not with -K or -k.\n" );
 
-  exit(0);
+    exit(0);
 }
 
 
@@ -2435,7 +2441,7 @@ int main(int argc, char* argv[])
             traceEvent(TRACE_ERROR, "invalid ipv6 address: %s", ip6_addr);
         }
         /* TODO: error check */
-        tuntap_config.ip6_prefixlen = strtol(ip6_prefixlen, NULL, 10);
+        tuntap_config.ip6_prefixlen = (uint8_t) strtol(ip6_prefixlen, NULL, 10);
     }
 
 #if defined(N2N_HAS_CAPABILITIES)
