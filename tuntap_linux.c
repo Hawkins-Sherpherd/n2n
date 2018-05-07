@@ -18,13 +18,8 @@
 #include "n2n.h"
 
 #ifdef __linux__
-#include <net/if_arp.h>
-
-struct in6_ifreq {
-    struct in6_addr ifr6_addr;
-    uint32_t ifr6_prefixlen;
-    unsigned int ifr6_ifindex;
-};
+#include <net/if_arp.h> /* required for ARPHRD_ETHER */
+#include <linux/ipv6.h> /* struct in6_ifreq */
 
 static void read_mac(const char *ifname, n2n_mac_t mac_addr) {
     int _sock, res;
@@ -70,7 +65,6 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
     struct ifreq ifr;
     struct in6_ifreq ifr6;
 
-   
     _sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (_sock < 0) {
         traceEvent(TRACE_ERROR, "socket() [%s][%d]\n", strerror(errno), _sock);
