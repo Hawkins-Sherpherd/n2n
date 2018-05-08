@@ -403,12 +403,13 @@ int fill_sockaddr( struct sockaddr * addr,
 {
     int retval=-1;
 
+    memset(addr, 0, addrlen);
     if ( AF_INET == sock->family ) {
         if ( addrlen >= sizeof(struct sockaddr_in) ) {
             struct sockaddr_in* si = (struct sockaddr_in* )addr;
             si->sin_family = sock->family;
             si->sin_port = htons( sock->port );
-            memcpy( &(si->sin_addr), sock->addr.v4, IPV4_SIZE );
+            memcpy( &si->sin_addr, sock->addr.v4, IPV4_SIZE );
             retval = 0;
         }
     } else if ( AF_INET6 == sock->family ) {
@@ -416,7 +417,7 @@ int fill_sockaddr( struct sockaddr * addr,
             struct sockaddr_in6* si = (struct sockaddr_in6*) addr;
             si->sin6_family = sock->family;
             si->sin6_port = htons( sock->port );
-            memcpy( &(si->sin6_addr), sock->addr.v6, IPV6_SIZE );
+            memcpy( &si->sin6_addr, sock->addr.v6, IPV6_SIZE );
             retval = 0;
         }
     }
