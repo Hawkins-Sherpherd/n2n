@@ -1347,11 +1347,10 @@ static void readFromTAPSocket( n2n_edge_t * eee )
         traceEvent(TRACE_INFO, "### Rx TAP packet (%4d) for %s",
                    (signed int)len, macaddr_str(mac_buf, mac) );
 
-        if ( eee->drop_multicast &&
-             ( is_ip6_discovery( eth_pkt, len ) ||
-               is_ethMulticast( eth_pkt, len)
-             )
-            )
+        /* don't filter ip6_discovery this is needed for ip6 connectivity */
+        if ( eee->drop_multicast && (
+             is_ethMulticast( eth_pkt, len) /* || is_ip6_discovery( eth_pkt, len ) */
+            ) )
         {
             traceEvent(TRACE_DEBUG, "Dropping multicast");
         }
@@ -1361,7 +1360,6 @@ static void readFromTAPSocket( n2n_edge_t * eee )
         }
     }
 }
-
 
 
 /** A PACKET has arrived containing an encapsulated ethernet datagram - usually
@@ -1885,9 +1883,10 @@ static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn) {
         struct addrinfo * ainfo = NULL;
         int nameerr;
 
-        if ( supernode_port )
-            sn->port = atoi(supernode_port);
-        else
+        if ( supernode_port ) {
+            sn->port = atoi(supernode_port + 1);
+            *(supernode_port) = '\0';
+        } else
             sn->port = SUPERNODE_PORT;
         if (sn->port == 0)
             sn->port = SUPERNODE_PORT;
