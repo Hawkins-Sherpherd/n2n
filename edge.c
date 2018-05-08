@@ -1872,29 +1872,28 @@ static void startTunReadThread(n2n_edge_t *eee)
  */
 static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn) {
     n2n_sn_name_t addr;
-
     memcpy( addr, addrIn, N2N_EDGE_SN_HOST_SIZE );
-
-    char *supernode_port;
-    supernode_port = strrchr(addr, ':');
-
-    if(addr) {       
-        const struct addrinfo aihints = { 0,  AF_UNSPEC, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
+    size_t len = strnlen(addr, N2N_EDGE_SN_HOST_SIZE);
+    if ( len > 0) {       
+        const struct addrinfo aihints = { 0, AF_UNSPEC, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
         struct addrinfo * ainfo = NULL;
         int nameerr;
-
-        if ( supernode_port ) {
-            sn->port = atoi(supernode_port + 1);
-            *(supernode_port) = '\0';
-        } else
-            sn->port = SUPERNODE_PORT;
+        char *supernode_port = NULL;
+        
+        if (addr[len - 1] != ']') {
+            supernode_port = strrchr(addr, ':');
+            if ( supernode_port ) {
+                sn->port = atoi(supernode_port + 1);
+                *(supernode_port) = '\0';
+            } else
+                sn->port = SUPERNODE_PORT;
+        }
         if (sn->port == 0)
             sn->port = SUPERNODE_PORT;
 
         nameerr = getaddrinfo( addr, NULL, &aihints, &ainfo );
 
         if( 0 == nameerr ) {
-            
             /* ainfo is the head of a linked list if non-NULL. */
             if (ainfo) {
                 if (PF_INET == ainfo->ai_family) {
@@ -1907,14 +1906,25 @@ static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn) {
                     sn->family = AF_INET6;
                 }
             } else {
-                /* Should only return IPv4 addresses due to aihints. */
                 traceEvent(TRACE_WARNING, "Failed to resolve supernode IP address for %s", addr);
             }
 
             freeaddrinfo(ainfo); /* free everything allocated by getaddrinfo(). */
             ainfo = NULL;
         } else {
-            traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %s", addr, gai_strerror(nameerr));
+            /* try to see if it's an numeric ip */
+            if ( addr[0] == '[' ) {
+                /* cut leading and trailing brackets */
+                addr[strnlen(addr, N2N_EDGE_SN_HOST_SIZE) - 1] = '\0';
+                if (inet_pton(AF_INET6, addr + 1, &sn->addr.v6) != 1) {
+                    traceEvent(TRACE_WARNING, "Failed to parse supernode as IPv6 %s: %s", addr, strerror(errno));
+                }
+            } else {
+                if (inet_pton(AF_INET, addr, &sn->addr.v4) != 1) {
+                    traceEvent(TRACE_WARNING, "Failed to parse supernode as IPv4 %s: %s", addr, strerror(errno));
+                }
+            }
+            // traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %s", addr, gai_strerror(nameerr));
         }
 
     } else
