@@ -7,7 +7,7 @@
 
 /* 1500 bytes payload + 14 bytes ethernet header + 4 bytes VLAN tag */
 #define MTU 1518
-
+/* TODO error messages using the same framework as the rest of the program */
 void initWin32() {
     WSADATA wsaData;
     int err;
@@ -59,24 +59,51 @@ static DWORD set_dhcp(struct tuntap_dev* device) {
     return 0;
 }
 
-static DWORD set_static_ip_address(struct tuntap_dev* device) {
-#if 0
-    ULONG NTEContext, NTEInstance;
-    DWORD rc;
-    rc = AddIPAddress(
-        (IPAddr)device->ip_addr,
-        (IPAddr)device->device_mask,
-        device->ifIdx, &NTEContext, &NTEInstance
-    );
+static uint8_t netmask_to_prefixlen(uint32_t netmask) {
+    uint8_t prefixlen = 0;
 
-    switch (rc) {
-        /* ip already set */
-        case ERROR_OBJECT_ALREADY_EXISTS:
-            return 0;
-        default:
-            return rc;
+    while (netmask > 0) {
+            netmask = netmask >> 1;
+            prefixlen++;
     }
-#endif
+
+    return prefixlen;
+}
+
+static DWORD set_static_ip_address(struct tuntap_dev* device) {
+#if 1
+    DWORD rc;
+    MIB_UNICASTIPADDRESS_ROW ip_row;
+
+    InitializeUnicastIpAddressEntry(&ip_row);
+    memcpy(&ip_row.InterfaceLuid, &device->luid, sizeof(NET_LUID));
+    ip_row.Address.si_family = AF_INET;
+    ip_row.Address.Ipv4.sin_family = AF_INET;
+    memcpy(&ip_row.Address.Ipv4.sin_addr, &device->ip_addr, IPV4_SIZE);
+    ip_row.OnLinkPrefixLength = netmask_to_prefixlen(device->device_mask);
+    /* todo remove previous addresses from interface */
+    DeleteUnicastIpAddressEntry(&ip_row);
+    rc = CreateUnicastIpAddressEntry(&ip_row);
+
+    if (rc != 0)
+        return rc;
+
+    if (device->ip6_prefixlen > 0) {
+        InitializeUnicastIpAddressEntry(&ip_row);
+        memset(&ip_row, 0, sizeof(ip_row));
+        memcpy(&ip_row.InterfaceLuid, &device->luid, sizeof(NET_LUID));
+        ip_row.Address.si_family = AF_INET6;
+        ip_row.Address.Ipv6.sin6_family = AF_INET6;
+        memcpy(&ip_row.Address.Ipv6.sin6_addr, &device->ip6_addr, IPV6_SIZE);
+        ip_row.OnLinkPrefixLength = device->ip6_prefixlen;
+        ip_row.DadState = IpDadStatePreferred;
+        /* todo remove previous addresses from interface */
+        DeleteUnicastIpAddressEntry(&ip_row);
+        rc = CreateUnicastIpAddressEntry(&ip_row);
+    }
+
+    return rc;
+#else
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
     WCHAR windows_path[64], cmd[128], netsh[256];
     char ip[INET6_ADDRSTRLEN], mask[INET_ADDRSTRLEN];
@@ -111,8 +138,8 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
     shex.lpParameters = netsh;
 
     rc = ShellExecuteEx(&shex);
-
     return 0;
+#endif
 }
 
 int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
@@ -121,11 +148,11 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     WCHAR regpath[1024];
     WCHAR adapterid[1024];
     WCHAR tapname[1024];
-    char ip_address[INET6_ADDRSTRLEN];
     long len;
     int found = 0;
     int i;
     ULONG status = TRUE;
+    macstr_t mac_addr_buf;
 
     memset(device, 0, sizeof(struct tuntap_dev));
     device->device_handle = INVALID_HANDLE_VALUE;
@@ -133,12 +160,6 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     device->ifIdx = NET_IFINDEX_UNSPECIFIED;
 
     memset(&device->luid, 0, sizeof(NET_LUID));
-
-    memcpy(&device->ip_addr, &config->ip_addr, sizeof(config->ip_addr));
-    memcpy(&device->device_mask, &config->netmask, sizeof(config->netmask));
-    memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
-    device->ip6_prefixlen = config->ip6_prefixlen;
-    device->mtu = config->mtu;
 
     /* Open registry and look for network adapters */
     if((rc = RegOpenKeyEx(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &key))) {
@@ -218,6 +239,15 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         return -1;
     }
 
+    memcpy(&device->ip_addr, &config->ip_addr, sizeof(config->ip_addr));
+    memcpy(&device->device_mask, &config->netmask, sizeof(config->netmask));
+    memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
+    device->ip6_prefixlen = config->ip6_prefixlen;
+    device->mtu = config->mtu;
+
+    traceEvent(TRACE_NORMAL, "Interface %ls has MAC %s", device->device_name,
+               macaddr_str(mac_addr_buf, device->mac_addr));
+#if 0
     printf("Open device [name=%ls][ip=%s][ifIdx=%u][MTU=%d][mac=%02X:%02X:%02X:%02X:%02X:%02X]\n",
            device->device_name,
            inet_ntop(AF_INET, &device->ip_addr, (PSTR) &ip_address, INET_ADDRSTRLEN),
@@ -228,10 +258,11 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
            device->mac_addr[3] & 0xFF,
            device->mac_addr[4] & 0xFF,
            device->mac_addr[5] & 0xFF);
+#endif
 
     /* ****************** */
 
-    printf("Setting %ls device address...\n", device->device_name);
+    /* printf("Setting %ls device address...\n", device->device_name); */
 
     if (config->dyn_ip4)
     {
@@ -244,8 +275,11 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
 
     if (rc == 0) {
         tuntap_get_address(device);
-    } else
-        printf("WARNING: Unable to set device %ls IP address [rc=%u]\n", device->device_name, rc);
+    } else {
+        W32_ERROR(rc, error)
+        printf("WARNING: Unable to set device %ls IP address: %ls", device->device_name, error);
+        W32_ERROR_FREE(error)
+    }
 
     /* ****************** */
 
@@ -337,13 +371,12 @@ void tuntap_close(struct tuntap_dev *tuntap) {
 /* Fill out the ip_addr value from the interface. Called to pick up dynamic
  * address changes. */
 void tuntap_get_address(struct tuntap_dev *tuntap) {
-    char buffer[16], buffer2[16];
     IP_ADAPTER_ADDRESSES* adapter_list;
     ULONG size = 0;
 
     if (GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_FRIENDLY_NAME, NULL, NULL, &size) != ERROR_BUFFER_OVERFLOW)
         return;
-    adapter_list = malloc (size);
+    adapter_list = malloc(size);
 
     if (GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_FRIENDLY_NAME, NULL, adapter_list, &size) != NO_ERROR) {
         free(adapter_list);
@@ -374,11 +407,7 @@ void tuntap_get_address(struct tuntap_dev *tuntap) {
     }
 
     free(adapter_list);
-    printf("Device %ls set to %s/%s\n",
-        tuntap->device_name,
-        inet_ntop(AF_INET, &tuntap->ip_addr, buffer, 16),
-        inet_ntop(AF_INET, &tuntap->device_mask, buffer2, 16)
-    );
+    /*printf("Device %ls set to %s/%s\n", tuntap->device_name, inet_ntop(AF_INET, &tuntap->ip_addr, buffer, 16), inet_ntop(AF_INET, &tuntap->device_mask, buffer2, 16)); */
 }
 /* ************************************************ */
 

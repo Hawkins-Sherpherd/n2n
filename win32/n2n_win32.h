@@ -124,11 +124,11 @@ typedef struct tuntap_dev {
 	unsigned int mtu;
 } tuntap_dev;
 
-#define W32_SOCKET_ERROR(rc, error_string) \
-        LPVOID error_string; \
+#define W32_ERROR(rc, error_string) \
+        LPTSTR error_string = NULL; \
         FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,\
             NULL, rc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &error_string, 0,NULL );
-#define W32_SOCKET_ERROR_FREE(error_string) LocalFree( error_string );
+#define W32_ERROR_FREE(error_string) LocalFree( error_string );
 
 extern void initWin32();
 

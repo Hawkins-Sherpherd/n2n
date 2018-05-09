@@ -548,9 +548,9 @@ static ssize_t sendto_sock( SOCKET fd, const void * buf, size_t len, const n2n_s
     {
 #ifdef _WIN32
         int error = WSAGetLastError();
-        W32_SOCKET_ERROR(error, c)
+        W32_ERROR(error, c)
         traceEvent( TRACE_ERROR, "sendto failed (%d) %ls", error, c );
-        W32_SOCKET_ERROR_FREE(c)
+        W32_ERROR_FREE(c)
 #else
         char * c = strerror(errno);
         traceEvent( TRACE_ERROR, "sendto failed (%d) %s", errno, c );
@@ -1455,9 +1455,9 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
     if ( recvlen < 0 )
     {
 #ifdef _WIN32
-        W32_SOCKET_ERROR(WSAGetLastError(), c)
+        W32_ERROR(WSAGetLastError(), c)
         traceEvent( TRACE_ERROR, "mgmt recvfrom failed with %ls", c );
-        W32_SOCKET_ERROR_FREE(c)
+        W32_ERROR_FREE(c)
 #else
         traceEvent(TRACE_ERROR, "mgmt recvfrom failed with %s", strerror(errno) );
 #endif
@@ -1660,9 +1660,9 @@ static void readFromIPSocket( n2n_edge_t * eee )
     if ( recvlen < 0 )
     {
 #ifdef _WIN32
-        W32_SOCKET_ERROR(WSAGetLastError(), c)
+        W32_ERROR(WSAGetLastError(), c)
         traceEvent( TRACE_ERROR, "recvfrom failed with %ls", c );
-        W32_SOCKET_ERROR_FREE(c)
+        W32_ERROR_FREE(c)
 #else
         traceEvent(TRACE_ERROR, "recvfrom failed with %s", strerror(errno) );
 #endif

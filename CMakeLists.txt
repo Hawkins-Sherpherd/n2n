@@ -75,7 +75,7 @@ endif()
 
 add_executable(supernode sn.c ${OBJECTS})
 if(DEFINED WIN32)
-# set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")
+set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")
 endif(DEFINED WIN32)
 
 if(NOT DEFINED WIN32)
