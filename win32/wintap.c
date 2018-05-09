@@ -78,14 +78,14 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 
     /* clear previous address configuration */
     GetUnicastIpAddressTable(AF_UNSPEC, &ip_address_table);
-    for (size_t i = ip_address_table.NumEntries; i--;) {
-        PMIB_UNICASTIPADDRESS_ROW row = ip_address_table.Table[i];
+    for (size_t i = ip_address_table->NumEntries; i--;) {
+        PMIB_UNICASTIPADDRESS_ROW row = &ip_address_table->Table[i];
         if (row->InterfaceIndex == device->ifIdx) {
             DeleteUnicastIpAddressEntry(row);
         }
     }
 
-    FreeMibTable(&ip_address_table);
+    FreeMibTable(ip_address_table);
 
     InitializeUnicastIpAddressEntry(&ip_row);
     memcpy(&ip_row.InterfaceLuid, &device->luid, sizeof(NET_LUID));
