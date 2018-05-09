@@ -74,6 +74,18 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 #if 1
     DWORD rc;
     MIB_UNICASTIPADDRESS_ROW ip_row;
+    PMIB_UNICASTIPADDRESS_TABLE ip_address_table = NULL;
+
+    /* clear previous address configuration */
+    GetUnicastIpAddressTable(AF_UNSPEC, &ip_address_table);
+    for (size_t i = ip_address_table.NumEntries; i--;) {
+        PMIB_UNICASTIPADDRESS_ROW row = ip_address_table.Table[i];
+        if (row->InterfaceIndex == device->ifIdx) {
+            DeleteUnicastIpAddressEntry(row);
+        }
+    }
+
+    FreeMibTable(&ip_address_table);
 
     InitializeUnicastIpAddressEntry(&ip_row);
     memcpy(&ip_row.InterfaceLuid, &device->luid, sizeof(NET_LUID));
@@ -81,8 +93,6 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
     ip_row.Address.Ipv4.sin_family = AF_INET;
     memcpy(&ip_row.Address.Ipv4.sin_addr, &device->ip_addr, IPV4_SIZE);
     ip_row.OnLinkPrefixLength = netmask_to_prefixlen(device->device_mask);
-    /* todo remove previous addresses from interface */
-    DeleteUnicastIpAddressEntry(&ip_row);
     rc = CreateUnicastIpAddressEntry(&ip_row);
 
     if (rc != 0)
@@ -97,8 +107,6 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
         memcpy(&ip_row.Address.Ipv6.sin6_addr, &device->ip6_addr, IPV6_SIZE);
         ip_row.OnLinkPrefixLength = device->ip6_prefixlen;
         ip_row.DadState = IpDadStatePreferred;
-        /* todo remove previous addresses from interface */
-        DeleteUnicastIpAddressEntry(&ip_row);
         rc = CreateUnicastIpAddressEntry(&ip_row);
     }
 
