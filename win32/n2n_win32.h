@@ -130,8 +130,12 @@ typedef struct tuntap_dev {
             NULL, rc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &error_string, 0,NULL );
 #define W32_ERROR_FREE(error_string) LocalFree( error_string );
 
+extern HANDLE event_log;
+
+extern wchar_t scm_name[16];
+
 void initWin32();
 
-int scm_startup();
+int scm_startup(wchar_t* name);
 
 #endif

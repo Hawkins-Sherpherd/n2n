@@ -682,6 +682,13 @@ int main( int argc, char * const argv[] )
     n2n_sn_t sss;
     bool ipv4 = false, ipv6 = false;
 
+#if _WIN32
+    if (scm_startup(L"supernode") == 1) {
+        /* supernode is running as a service, so quit */
+        return 0;
+    }
+#endif
+
     init_sn( &sss );
 
     {

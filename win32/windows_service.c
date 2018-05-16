@@ -1,22 +1,28 @@
 #include "../n2n.h"
 #include "n2n_win32.h"
 
+static SERVICE_STATUS_HANDLE service_status_handle;
+static SERVICE_STATUS service_status;
+
+HANDLE event_log = INVALID_HANDLE_VALUE;
+
+static bool scm_startup_complete = false;
+
 extern int main(int argc, char* argv[]);
 
 int scm_start_service(DWORD, LPWSTR*);
 
-SERVICE_TABLE_ENTRYW dispatch_table[] =
-{
-	{ L"edge", (LPSERVICE_MAIN_FUNCTIONW) scm_start_service },
-	{ NULL, NULL }
-};
+wchar_t scm_name[16];
 
-static SERVICE_STATUS_HANDLE service_status_handle;
-static SERVICE_STATUS service_status;
+int scm_startup(wchar_t* name) {
+	wcsncpy(scm_name, name, 16);
 
-static bool scm_startup_complete = false;
+	SERVICE_TABLE_ENTRYW dispatch_table[] =
+	{
+		{ scm_name, (LPSERVICE_MAIN_FUNCTIONW) scm_start_service },
+		{ NULL, NULL }
+	};
 
-int scm_startup() {
     if (scm_startup_complete) {
         return 0;
     }
@@ -70,16 +76,19 @@ static VOID WINAPI service_handler(DWORD dwControl) {
 }
 
 int scm_start_service(DWORD num, LPWSTR* args) {
-	service_status_handle = RegisterServiceCtrlHandlerW(L"edge", service_handler);
+	service_status_handle = RegisterServiceCtrlHandlerW(scm_name, service_handler);
+	event_log = RegisterEventSource(NULL, scm_name);
+
 	ZeroMemory(&service_status, sizeof(service_status));
 	service_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
 	ReportSvcStatus(SERVICE_START_PENDING, NO_ERROR, 300);
 	ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
+
     /* TODO read arguments from Registry */
     char* argv[] =
 	{
-		"edge.exe",
-		"@edge.txt",
+		"", /* program name */
+		"@C:\\Users\\maxre\\edge.txt",
 		NULL
 	};
 	return main(2, argv);

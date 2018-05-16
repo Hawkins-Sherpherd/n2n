@@ -30,9 +30,11 @@
 
 /* Moved here to define _CRT_SECURE_NO_WARNINGS before all the including takes place */
 #if defined(_WIN32)
-#include "win32/n2n_win32.h"
 #undef N2N_HAVE_DAEMON
 #undef N2N_HAVE_SETUID
+
+#include "win32/n2n_win32.h"
+
 #else
 /* Some capability defaults which can be reset for particular platforms. */
 #define N2N_HAVE_DAEMON 1

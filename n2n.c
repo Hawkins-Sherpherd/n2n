@@ -105,63 +105,83 @@ bool useSyslog = false, syslog_opened = false, useSystemd = false;
 
 #define N2N_TRACE_DATESIZE 32
 void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
-  va_list va_ap;
+    va_list va_ap;
 
   if(eventTraceLevel <= traceLevel) {
-    char buf[2048];
-    char out_buf[640];
-    char theDate[N2N_TRACE_DATESIZE];
-    char *extra_msg = "";
-    time_t theTime = time(NULL);
-	size_t i;
+        char buf[2048];
+        char out_buf[640];
+        char theDate[N2N_TRACE_DATESIZE];
+        char *extra_msg = "";
+        time_t theTime = time(NULL);
+        size_t i;
 
-    /* We have two paths - one if we're logging, one if we aren't
-     *   Note that the no-log case is those systems which don't support it (WIN32),
-     *                                those without the headers !defined(USE_SYSLOG)
-     *                                those where it's parametrically off...
-     */
+        /* We have two paths - one if we're logging, one if we aren't
+        *   Note that the no-log case is those systems which don't support it (WIN32),
+        *                                those without the headers !defined(USE_SYSLOG)
+        *                                those where it's parametrically off...
+        */
 
-    memset(buf, 0, sizeof(buf));
+        memset(buf, 0, sizeof(buf));
 
-    va_start (va_ap, format);
-    vsnprintf(buf, sizeof(buf)-1, format, va_ap);
-    va_end(va_ap);
+        va_start (va_ap, format);
+        vsnprintf(buf, sizeof(buf)-1, format, va_ap);
+        va_end(va_ap);
 
-    if(eventTraceLevel == 0 /* TRACE_ERROR */)
-      extra_msg = "ERROR: ";
-    else if(eventTraceLevel == 1 /* TRACE_WARNING */)
-      extra_msg = "WARNING: ";
+        if(eventTraceLevel == 0 /* TRACE_ERROR */)
+        extra_msg = "ERROR: ";
+        else if(eventTraceLevel == 1 /* TRACE_WARNING */)
+        extra_msg = "WARNING: ";
 
-    while(buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
+        while(buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 
 #ifndef _WIN32
-    if(useSyslog) {
-        if(!syslog_opened) {
-            openlog("n2n", LOG_PID, LOG_DAEMON);
-            syslog_opened = 1;
-        }
+        if(useSyslog) {
+            if(!syslog_opened) {
+                openlog("n2n", LOG_PID, LOG_DAEMON);
+                syslog_opened = 1;
+            }
 
-        snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
-        syslog(LOG_INFO, "%s", out_buf);
-    } else {
-        if (useSystemd)
             snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
-        else {
-            strftime(theDate, N2N_TRACE_DATESIZE, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
-            for(i=strlen(file)-1; i>0; i--) if(file[i] == '/') { i++; break; };
-            snprintf(out_buf, sizeof(out_buf), "%s [%15s:%4d] %s%s", theDate, &file[i], line, extra_msg, buf);
+            syslog(LOG_INFO, "%s", out_buf);
+        } else {
+            if (useSystemd)
+                snprintf(out_buf, sizeof(out_buf), "%s%s", extra_msg, buf);
+            else {
+                strftime(theDate, N2N_TRACE_DATESIZE, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
+                for(i=strlen(file)-1; i>0; i--) if(file[i] == '/') { i++; break; };
+                snprintf(out_buf, sizeof(out_buf), "%s [%15s:%4d] %s%s", theDate, &file[i], line, extra_msg, buf);
+            }
+            printf("%s\n", out_buf);
+            fflush(stdout);
         }
-        printf("%s\n", out_buf);
-        fflush(stdout);
-    }
 #else
-    strftime(theDate, N2N_TRACE_DATESIZE, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
-	for(i=strlen(file)-1; i>0; i--) if(file[i] == '\\') { i++; break; };
-    snprintf(out_buf, sizeof(out_buf), "%s [%15s:%4d] %s%s", theDate, &file[i], line, extra_msg, buf);
-    printf("%s\n", out_buf);
-    fflush(stdout);
+        if (event_log == INVALID_HANDLE_VALUE) {
+            /* running in the console */
+            strftime(theDate, N2N_TRACE_DATESIZE, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
+            for(i=strlen(file)-1; i>0; i--) if(file[i] == '\\') { i++; break; };
+            snprintf(out_buf, sizeof(out_buf), "%s [%15s:%4d] %s%s", theDate, &file[i], line, extra_msg, buf);
+            printf("%s\n", out_buf);
+            fflush(stdout);
+        } else {
+            /* running as a service */
+            wchar_t out[640];
+            _snwprintf(out, sizeof(out), L"%hs%hs", extra_msg, buf);
+
+            wchar_t* msg[] = {
+                scm_name,
+                out
+            };
+
+            short level = EVENTLOG_ERROR_TYPE;
+            if(eventTraceLevel == 1)
+                level = EVENTLOG_WARNING_TYPE;
+            else if(eventTraceLevel == 2)
+                level = EVENTLOG_INFORMATION_TYPE;
+            
+            ReportEventW(event_log, level, 0, 0, NULL, 2, 0, msg, NULL);
+        }
 #endif
-  }
+    }
 
 }
 

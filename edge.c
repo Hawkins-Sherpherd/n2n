@@ -2101,7 +2101,7 @@ int main(int argc, char* argv[])
     cap_free(caps_original);
 #endif
 #if _WIN32
-    if (scm_startup() == 1) {
+    if (scm_startup(L"edge") == 1) {
         /* edge is running as a service, so quit */
         return 0;
     }
