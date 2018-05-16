@@ -2100,6 +2100,12 @@ int main(int argc, char* argv[])
     cap_free(caps);
     cap_free(caps_original);
 #endif
+#if _WIN32
+    if (scm_startup() == 1) {
+        /* edge is running as a service, so quit */
+        return 0;
+    }
+#endif
 
     if (-1 == edge_init(&eee) ) {
         traceEvent( TRACE_ERROR, "Failed in edge_init" );
