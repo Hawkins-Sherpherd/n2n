@@ -76,6 +76,7 @@ endif()
 add_executable(supernode sn.c ${OBJECTS})
 if(DEFINED WIN32)
 set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/win32/install.ps1" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 endif(DEFINED WIN32)
 
 if(NOT DEFINED WIN32)
@@ -90,7 +91,7 @@ install(TARGETS edge supernode
         RUNTIME DESTINATION sbin
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
-       )
+)
 
 # Documentation
 if(DEFINED UNIX)

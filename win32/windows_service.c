@@ -75,6 +75,78 @@ static VOID WINAPI service_handler(DWORD dwControl) {
 	ReportSvcStatus(service_status.dwCurrentState, NO_ERROR, 0);
 }
 
+#define REGKEY_TEMPLATE L"SOFTWARE\\n2n"
+
+int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
+#define ARGUMENT_LENGTH 4048
+	WCHAR regpath[1024];
+	HKEY key;
+
+	_snwprintf(regpath, sizeof(regpath), REGKEY_TEMPLATE "\\%s", scm_name);
+
+	if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, regpath, 0, KEY_READ, &key)) {
+		W32_ERROR(GetLastError(), error)
+		traceEvent(TRACE_ERROR, "Could not open key HKLM\\%ls: %ls", regpath, error);
+		W32_ERROR_FREE(error);
+		return 0;
+	}
+
+	wchar_t data[ARGUMENT_LENGTH];
+	DWORD len = ARGUMENT_LENGTH;
+	DWORD type = 0;
+	if (RegGetValue(key, NULL, L"Arguments", RRF_RT_REG_SZ, &type, &data, &len)) {
+		W32_ERROR(GetLastError(), error)
+		traceEvent(TRACE_ERROR, "Registry key HKLM\\%ls has no string value 'Arguments': %ls", regpath, error);
+		W32_ERROR_FREE(error);
+		return 0;
+	}
+
+	int maxargc = 16;
+	int argc = 0;
+	*argv = (char**) malloc(maxargc * sizeof(char*));
+	size_t buffer_size = (wcslen(scm_name) + 1);
+	(*argv)[argc] = malloc(buffer_size);
+	wcstombs((*argv)[argc], scm_name, buffer_size);
+	argc++;
+
+	if (type == REG_SZ) {
+		wchar_t* buffer = data;
+		wchar_t* buff = buffer;
+		while(buff) {
+			wchar_t* p = wcschr(buff, L' ');
+			if (p) {
+				*p = L'\0';
+				buffer_size = (wcslen(buff) + 1);
+				(*argv)[argc] = malloc(buffer_size);
+				wcstombs((*argv)[argc], buff, buffer_size);
+				argc++;
+				while(*++p == ' ' && *p != '\0');
+				buff = p;
+				if (argc >= maxargc) {
+					maxargc *= 2;
+                	*argv = (char **) realloc(*argv, maxargc * sizeof(char*));
+					if (*argv == NULL) {
+						traceEvent(TRACE_ERROR, "Unable to re-allocate memory");
+						return 0;
+					}
+				}
+			} else {
+				buffer_size = (wcslen(buff) + 1);
+	            (*argv)[argc] = malloc(buffer_size);
+				wcstombs((*argv)[argc], buff, buffer_size);
+				argc++;
+    	        break;
+        	}
+		}
+	} else {
+		traceEvent(TRACE_ERROR, "Registry value HKLM\\%ls\\Arguments is of unknown type %u", regpath, type);
+	}
+
+	RegCloseKey(key);
+
+	return argc;
+}
+
 int scm_start_service(DWORD num, LPWSTR* args) {
 	service_status_handle = RegisterServiceCtrlHandlerW(scm_name, service_handler);
 	event_log = RegisterEventSource(NULL, scm_name);
@@ -84,12 +156,14 @@ int scm_start_service(DWORD num, LPWSTR* args) {
 	ReportSvcStatus(SERVICE_START_PENDING, NO_ERROR, 300);
 	ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
 
-    /* TODO read arguments from Registry */
-    char* argv[] =
-	{
-		"", /* program name */
-		"@C:\\Users\\maxre\\edge.txt",
-		NULL
-	};
-	return main(2, argv);
+	char** argv = NULL;
+	int argc = get_argv_from_registry(scm_name, &argv);
+
+	if (!argv) {
+		ReportSvcStatus(SERVICE_STOP_PENDING, ERROR_BAD_CONFIGURATION, 500);
+		ReportSvcStatus(SERVICE_STOPPED, ERROR_BAD_CONFIGURATION, 0);
+		return -1;
+	}
+	else
+		return main(argc, argv);
 }

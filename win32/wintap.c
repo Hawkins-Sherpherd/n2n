@@ -35,26 +35,28 @@ static int get_adapter_luid(PWSTR device_name, NET_LUID* luid) {
 
 static DWORD set_dhcp(struct tuntap_dev* device) {
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
-    WCHAR windows_path[64], cmd[128], netsh[256];
+    WCHAR windows_path[128], cmd[128], netsh[256];
     DWORD rc;
-    SHELLEXECUTEINFO shex;
+
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
 
     ConvertInterfaceLuidToNameW(&device->luid, if_name, MAX_ADAPTER_NAME_LENGTH);
-    GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
+    GetEnvironmentVariable(L"SystemRoot", windows_path, sizeof(windows_path));
 
     _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
     _snwprintf(netsh, 1024, L"interface ipv4 set address %s dhcp", if_name);
-    memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
 
-    shex.cbSize       = sizeof( SHELLEXECUTEINFO );
-    shex.fMask        = 0;
-    shex.lpVerb       = L"runas";
-    shex.lpFile       = cmd;
-    shex.lpParameters = netsh;
-
-    rc = ShellExecuteEx(&shex);
-
+    rc = CreateProcess(cmd, netsh, NULL, NULL, FALSE, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi);
     // print_windows_message(GetLastError());
+    if (rc == NO_ERROR) {
+        WaitForSingleObject( pi.hProcess, INFINITE );
+        CloseHandle( pi.hProcess );
+        CloseHandle( pi.hThread );
+    }
 
     return 0;
 }

@@ -214,54 +214,52 @@ static int readConfFile(const char * filename, char * const linebuffer) {
 
 /* Create the argv vector */
 static char ** buildargv(int * effectiveargc, char * const linebuffer) {
-  const int  INITIAL_MAXARGC = 16;	/* Number of args + NULL in initial argv */
-  int     maxargc;
-  int     argc=0;
-  char ** argv;
-  char *  buffer, * buff;
+    const int  INITIAL_MAXARGC = 16;	/* Number of args + NULL in initial argv */
+    int     maxargc;
+    int     argc=0;
+    char ** argv;
+    char *  buffer, * buff;
 
-  *effectiveargc = 0;
-  buffer = (char *)calloc(1, strlen(linebuffer)+2);
-  if (!buffer) {
-    traceEvent( TRACE_ERROR, "Unable to allocate memory");
-    return NULL;
-  }
-  strncpy(buffer, linebuffer,strlen(linebuffer));
-
-  maxargc = INITIAL_MAXARGC;
-  argv = (char **)malloc(maxargc * sizeof(char*));
-  if (argv == NULL) {
-    traceEvent( TRACE_ERROR, "Unable to allocate memory");
-    return NULL;
-  }
-  buff = buffer;
-  while(buff) {
-    char * p = strchr(buff,' ');
-    if (p) {
-      *p='\0';
-      argv[argc++] = strdup(buff);
-      while(*++p == ' ' && *p != '\0');
-      buff=p;
-      if (argc >= maxargc) {
-	maxargc *= 2;
-	argv = (char **)realloc(argv, maxargc * sizeof(char*));
-	if (argv == NULL) {
-	  traceEvent(TRACE_ERROR, "Unable to re-allocate memory");
-	  free(buffer);
-	  return NULL;
-	}
-      }
-    } else {
-      argv[argc++] = strdup(buff);
-      break;
+    *effectiveargc = 0;
+    buffer = (char *)calloc(1, strlen(linebuffer)+2);
+    if (!buffer) {
+        traceEvent( TRACE_ERROR, "Unable to allocate memory");
+        return NULL;
     }
-  }
-  free(buffer);
-  *effectiveargc = argc;
-  return argv;
+    strncpy(buffer, linebuffer,strlen(linebuffer));
+
+    maxargc = INITIAL_MAXARGC;
+    argv = (char **)malloc(maxargc * sizeof(char*));
+    if (argv == NULL) {
+        traceEvent( TRACE_ERROR, "Unable to allocate memory");
+        return NULL;
+    }
+    buff = buffer;
+    while(buff) {
+        char * p = strchr(buff,' ');
+        if (p) {
+            *p='\0';
+            argv[argc++] = strdup(buff);
+            while(*++p == ' ' && *p != '\0');
+            buff=p;
+            if (argc >= maxargc) {
+                maxargc *= 2;
+                argv = (char **)realloc(argv, maxargc * sizeof(char*));
+                if (argv == NULL) {
+                    traceEvent(TRACE_ERROR, "Unable to re-allocate memory");
+                    free(buffer);
+                    return NULL;
+                }
+            }
+        } else {
+            argv[argc++] = strdup(buff);
+            break;
+        }
+    }
+    free(buffer);
+    *effectiveargc = argc;
+    return argv;
 }
-
-
 
 /* ************************************** */
 
