@@ -139,7 +139,7 @@ static const char * supernode_ip( const n2n_edge_t * eee )
 static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addr);
 
 static void send_packet2net(n2n_edge_t * eee,
-			    uint8_t *decrypted_msg, size_t len);
+                uint8_t *decrypted_msg, size_t len);
 
 
 /* ************************************** */
@@ -471,27 +471,27 @@ static void help() {
 #if defined(N2N_CAN_NAME_IFACE)
         "-d <tun device> "
 #endif /* #if defined(N2N_CAN_NAME_IFACE) */
-	    "-a [static:|dhcp:]<tun IP address> "
-	    "-c <community> "
-	    "[-k <encrypt key> | -K <key file>] "
-	    "[-s <netmask>] "
+        "-a [static:|dhcp:]<tun IP address> "
+        "-c <community> "
+        "[-k <encrypt key> | -K <key file>] "
+        "[-s <netmask>] "
 #if defined(N2N_HAVE_SETUID)
-	    "[-u <uid> -g <gid>]"
+        "[-u <uid> -g <gid>]"
 #endif /* #ifndef N2N_HAVE_SETUID */
 
 #if defined(N2N_HAVE_DAEMON)
-	    "[-f]"
+        "[-f]"
 #endif /* #if defined(N2N_HAVE_DAEMON) */
 #ifndef _WIN32
-	    "[-m <MAC address>]"
+        "[-m <MAC address>]"
 #endif
-	    "\n"
-	    "-l <supernode host:port> "
-	    "[-p <local port>] "
+        "\n"
+        "-l <supernode host:port> "
+        "[-p <local port>] "
 #ifndef _WIN32
         "[-M <mtu>] "
 #endif
-	    "[-r] [-E] [-v] [-t <mgmt port>] [-b] [-h]\n\n");
+        "[-r] [-E] [-v] [-t <mgmt port>] [-b] [-h]\n\n");
 #ifdef __linux__
     printf("-d <tun device>          | tun device name\n");
 #endif
@@ -1448,7 +1448,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
     now = time(NULL);
     i = sizeof(sender_sock);
     recvlen=recvfrom(eee->udp_mgmt_sock, udp_buf, N2N_PKT_BUF_SIZE, 0/*flags*/,
-		     (struct sockaddr *)&sender_sock, (socklen_t*)&i);
+             (struct sockaddr *)&sender_sock, (socklen_t*)&i);
 
     if ( recvlen < 0 )
     {
@@ -1595,9 +1595,9 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
     msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
                          "paths  super:%u,%u p2p:%u,%u\n",
                          (unsigned int)eee->tx_sup,
-			 (unsigned int)eee->rx_sup,
-			 (unsigned int)eee->tx_p2p,
-			 (unsigned int)eee->rx_p2p );
+             (unsigned int)eee->rx_sup,
+             (unsigned int)eee->tx_p2p,
+             (unsigned int)eee->rx_p2p );
 
     msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
                          "trans:null |%6u|%6u|\n"
@@ -1613,7 +1613,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
     msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
                          "peers  pend:%u full:%u\n",
                          (unsigned int)peer_list_size( eee->pending_peers ), 
-			 (unsigned int)peer_list_size( eee->known_peers ) );
+             (unsigned int)peer_list_size( eee->known_peers ) );
 
     msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
                          "last   super:%lu(%ld sec ago) p2p:%lu(%ld sec ago)\n",
@@ -2127,8 +2127,7 @@ int main(int argc, char* argv[])
     eee.supernode.family = AF_INET;
 
     linebuffer = (char *)malloc(MAX_CMDLINE_BUFFER_LENGTH);
-    if (!linebuffer)
-    {
+    if (!linebuffer) {
         traceEvent( TRACE_ERROR, "Unable to allocate memory");
         exit(1);
     }
@@ -2139,19 +2138,13 @@ int main(int argc, char* argv[])
         if(linebuffer[i] == '\\') linebuffer[i] = '/';
 #endif
 
-    for(i=1;i<argc;++i)
-    {
-        if(argv[i][0] == '@')
-        {
+    for(i=1;i<argc;++i) {
+        if(argv[i][0] == '@') {
             if (readConfFile(&argv[i][1], linebuffer)<0) exit(1); /* <<<<----- check */
-        }
-        else if ((strlen(linebuffer)+strlen(argv[i])+2) < MAX_CMDLINE_BUFFER_LENGTH)
-        {
+        } else if ((strlen(linebuffer)+strlen(argv[i])+2) < MAX_CMDLINE_BUFFER_LENGTH) {
             strncat(linebuffer, " ", 1);
             strncat(linebuffer, argv[i], strlen(argv[i]));
-        }
-        else
-        {
+        } else {
             traceEvent( TRACE_ERROR, "too many argument");
             exit(1);
         }
@@ -2163,8 +2156,7 @@ int main(int argc, char* argv[])
     /* build the new argv from the linebuffer */
     effectiveargv = buildargv(&effectiveargc, linebuffer);
 
-    if (linebuffer)
-    {
+    if (linebuffer) {
         free(linebuffer);
         linebuffer = NULL;
     }
@@ -2173,20 +2165,16 @@ int main(int argc, char* argv[])
 
     optarg = NULL;
     while((opt = getopt_long(effectiveargc,
-                             effectiveargv,
-                             "K:k:a:A:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL)) != EOF)
-    {
-        switch (opt)
-        {
+        effectiveargv,
+        "K:k:a:A:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL
+    )) != EOF) {
+        switch (opt) {
         case'K':
         {
-            if ( encrypt_key )
-            {
+            if ( encrypt_key ) {
                 fprintf(stderr, "Error: -K and -k options are mutually exclusive.\n");
                 exit(1);
-            }
-            else
-            {
+            } else {
                 strncpy( eee.keyschedule, optarg, N2N_PATHNAME_MAXLEN-1 );
                 eee.keyschedule[N2N_PATHNAME_MAXLEN-1]=0; /* strncpy does not add NULL if the source has no NULL. */
                 traceEvent(TRACE_DEBUG, "keyfile = '%s'\n", eee.keyschedule);
@@ -2254,8 +2242,7 @@ int main(int argc, char* argv[])
 
         case 'k': /* encrypt key */
         {
-            if (strlen(eee.keyschedule) > 0 )
-            {
+            if (strlen(eee.keyschedule) > 0 ) {
                 fprintf(stderr, "Error: -K and -k options are mutually exclusive.\n");
                 exit(1);
             } else {
@@ -2272,14 +2259,11 @@ int main(int argc, char* argv[])
 
         case 'l': /* supernode-list */
         {
-            if ( eee.sn_num < N2N_EDGE_NUM_SUPERNODES )
-            {
+            if ( eee.sn_num < N2N_EDGE_NUM_SUPERNODES ) {
                 strncpy( (eee.sn_ip_array[eee.sn_num]), optarg, N2N_EDGE_SN_HOST_SIZE);
                 traceEvent(TRACE_DEBUG, "Adding supernode[%u] = %s\n", (unsigned int)eee.sn_num, (eee.sn_ip_array[eee.sn_num]) );
                 ++eee.sn_num;
-            }
-            else
-            {
+            } else {
                 fprintf(stderr, "Too many supernodes!\n" );
                 exit(1);
             }
@@ -2314,8 +2298,7 @@ int main(int argc, char* argv[])
 
         case 's': /* Subnet Mask */
         {
-            if (0 != got_s)
-            {
+            if (0 != got_s) {
                 traceEvent(TRACE_WARNING, "Multiple subnet masks supplied.");
             }
             strncpy(netmask, optarg, N2N_NETMASK_STR_SIZE);
@@ -2366,8 +2349,7 @@ int main(int argc, char* argv[])
     {
         useSyslog = 1; /* traceEvent output now goes to syslog. */
         prctl(PR_SET_KEEPCAPS, 1L);
-        if ( -1 == daemon( 0, 0 ) )
-        {
+        if ( -1 == daemon( 0, 0 ) ) {
             traceEvent( TRACE_ERROR, "Failed to become daemon." );
             exit(-5);
         }
@@ -2375,8 +2357,7 @@ int main(int argc, char* argv[])
 #endif /* #ifdef N2N_HAVE_DAEMON */
     traceEvent( TRACE_NORMAL, "Starting n2n edge %s %s", n2n_sw_version, n2n_sw_buildDate );
 
-    for (i=0; i< N2N_EDGE_NUM_SUPERNODES; ++i )
-    {
+    for (i=0; i< N2N_EDGE_NUM_SUPERNODES; ++i ) {
         traceEvent( TRACE_NORMAL, "supernode %u => %s\n", i, (eee.sn_ip_array[i]) );
     }
 
@@ -2393,31 +2374,26 @@ int main(int argc, char* argv[])
 
     if(!(
 #ifdef N2N_CAN_NAME_IFACE
-           (tuntap_dev_name[0] != 0) &&
+        (tuntap_dev_name[0] != 0) &&
 #endif
-           (eee.community_name[0] != 0) &&
-           (ip_addr[0] != 0)
-           ) )
-    {
+        (eee.community_name[0] != 0) &&
+        (ip_addr[0] != 0)
+    ) ) {
         help();
     }
 
-    if ( (NULL == encrypt_key ) && ( 0 == strlen(eee.keyschedule)) )
-    {
+    if ( (NULL == encrypt_key ) && ( 0 == strlen(eee.keyschedule)) ) {
         traceEvent(TRACE_WARNING, "Encryption is disabled in edge.");
         
         eee.null_transop = 1;
     }
 
 
-    if ( 0 == strcmp( "dhcp", ip_mode ) )
-    {
+    if ( 0 == strcmp( "dhcp", ip_mode ) ) {
         traceEvent(TRACE_NORMAL, "Dynamic IP address assignment enabled.");
 
         eee.dyn_ip_mode = 1;
-    }
-    else
-    {
+    } else {
         traceEvent(TRACE_NORMAL, "ip_mode='%s'", ip_mode);        
     }
 
