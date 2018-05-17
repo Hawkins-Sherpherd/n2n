@@ -183,8 +183,8 @@ static int readConfFile(const char * filename, char * const linebuffer) {
 
     /* strip out heading spaces */
     p = buffer;
-    while(*p == ' ' && *p != '\0') ++p;
-    if (p != buffer) strncpy(buffer,p,strlen(p)+1);
+    while (*p == ' ' && *p != '\0') ++p;
+    if (p != buffer) strcpy(buffer, p);
 
     /* strip out trailing spaces */
     while(strlen(buffer) && buffer[strlen(buffer)-1]==' ')
@@ -196,9 +196,9 @@ static int readConfFile(const char * filename, char * const linebuffer) {
       free(buffer);
       return -1;
     }
-    if ((strlen(linebuffer)+strlen(buffer)+2)< MAX_CMDLINE_BUFFER_LENGTH) {
-      strncat(linebuffer, " ", 1);
-      strncat(linebuffer, buffer, strlen(buffer));
+    if ((strlen(linebuffer) + strlen(buffer) + 2)< MAX_CMDLINE_BUFFER_LENGTH) {
+      strcat(linebuffer, " ");
+      strcat(linebuffer, buffer);
     } else {
       traceEvent(TRACE_ERROR, "too many argument");
       free(buffer);
@@ -226,7 +226,7 @@ static char ** buildargv(int * effectiveargc, char * const linebuffer) {
         traceEvent( TRACE_ERROR, "Unable to allocate memory");
         return NULL;
     }
-    strncpy(buffer, linebuffer,strlen(linebuffer));
+    strcpy(buffer, linebuffer);
 
     maxargc = INITIAL_MAXARGC;
     argv = (char **)malloc(maxargc * sizeof(char*));
@@ -2142,8 +2142,8 @@ int main(int argc, char* argv[])
         if(argv[i][0] == '@') {
             if (readConfFile(&argv[i][1], linebuffer)<0) exit(1); /* <<<<----- check */
         } else if ((strlen(linebuffer)+strlen(argv[i])+2) < MAX_CMDLINE_BUFFER_LENGTH) {
-            strncat(linebuffer, " ", 1);
-            strncat(linebuffer, argv[i], strlen(argv[i]));
+            strcat(linebuffer, " ");
+            strcat(linebuffer, argv[i]);
         } else {
             traceEvent( TRACE_ERROR, "too many argument");
             exit(1);
