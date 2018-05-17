@@ -82,12 +82,12 @@ int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
 	WCHAR regpath[1024];
 	HKEY key;
 
-	_snwprintf(regpath, sizeof(regpath), REGKEY_TEMPLATE "\\%s", scm_name);
+	swprintf(regpath, sizeof(regpath), REGKEY_TEMPLATE "\\%s", scm_name);
 
 	if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, regpath, 0, KEY_READ, &key)) {
 		W32_ERROR(GetLastError(), error)
 		traceEvent(TRACE_ERROR, "Could not open key HKLM\\%ls: %ls", regpath, error);
-		W32_ERROR_FREE(error);
+		W32_ERROR_FREE(error)
 		return 0;
 	}
 

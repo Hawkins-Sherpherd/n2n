@@ -16,7 +16,9 @@ void initWin32() {
     if( err != 0 ) {
         /* Tell the user that we could not find a usable */
         /* WinSock DLL.                                  */
-        printf("FATAL ERROR: unable to initialise Winsock 2.x.");
+        W32_ERROR(GetLastError(), error)
+        traceEvent(TRACE_ERROR, "Unable to initialise Winsock 2.x: %ls", error);
+        W32_ERROR_FREE(error);
         exit(-1);
     }
 }
@@ -36,29 +38,28 @@ static int get_adapter_luid(PWSTR device_name, NET_LUID* luid) {
 static DWORD set_dhcp(struct tuntap_dev* device) {
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
     WCHAR windows_path[128], cmd[128], netsh[256];
-    DWORD rc;
+    DWORD rc = 0;
 
-    STARTUPINFO si;
-    PROCESS_INFORMATION pi;
-    ZeroMemory(&si, sizeof(si));
+    STARTUPINFO si = { 0 };
+    PROCESS_INFORMATION pi = { 0 };
     si.cb = sizeof(si);
-    ZeroMemory(&pi, sizeof(pi));
 
     ConvertInterfaceLuidToNameW(&device->luid, if_name, MAX_ADAPTER_NAME_LENGTH);
     GetEnvironmentVariable(L"SystemRoot", windows_path, sizeof(windows_path));
 
-    _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
-    _snwprintf(netsh, 1024, L"interface ipv4 set address %s dhcp", if_name);
+    swprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
+    swprintf(netsh, 1024, L"interface ipv4 set address %s dhcp", if_name);
 
     rc = CreateProcess(cmd, netsh, NULL, NULL, FALSE, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi);
     // print_windows_message(GetLastError());
     if (rc == NO_ERROR) {
         WaitForSingleObject( pi.hProcess, INFINITE );
+        GetExitCodeProcess( pi.hProcess, &rc);
         CloseHandle( pi.hProcess );
         CloseHandle( pi.hThread );
     }
 
-    return 0;
+    return rc;
 }
 
 static uint8_t netmask_to_prefixlen(uint32_t netmask) {
@@ -173,7 +174,9 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
 
     /* Open registry and look for network adapters */
     if((rc = RegOpenKeyEx(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &key))) {
-        printf("Unable to read registry: [rc=%d]\n", rc);
+        W32_ERROR(GetLastError(), error)
+        traceEvent(TRACE_ERROR, "Could not open key HKLM\\%ls: %ls", NETWORK_CONNECTIONS_KEY, error);
+        W32_ERROR_FREE(error)
         exit(-1);
     }
 
@@ -183,7 +186,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
             break;
 
         /* Find out more about this adapter */
-        _snwprintf(regpath, sizeof(regpath), NETWORK_CONNECTIONS_KEY L"\\%s\\Connection", adapterid);
+        swprintf(regpath, sizeof(regpath), NETWORK_CONNECTIONS_KEY L"\\%s\\Connection", adapterid);
         if(RegOpenKeyEx(HKEY_LOCAL_MACHINE, regpath, 0, KEY_READ, &key2))
             continue;
 
@@ -197,10 +200,12 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
                 continue;
         }
 
-        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR L"%s" TAP_WIN_SUFFIX, adapterid);
-        device->device_handle = CreateFile(tapname, GENERIC_WRITE | GENERIC_READ,
-                                           0, /* Don't let other processes share or open the resource until the handle's been closed */
-                                           0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
+        swprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR L"%s" TAP_WIN_SUFFIX, adapterid);
+        device->device_handle = CreateFile(
+            tapname, GENERIC_WRITE | GENERIC_READ,
+            0, /* Don't let other processes share or open the resource until the handle's been closed */
+            0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0
+        );
         if(device->device_handle != INVALID_HANDLE_VALUE) {
             found = 1;
             break;
@@ -210,7 +215,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     RegCloseKey(key);
 
     if(!found) {
-        printf("No Windows tap device found!\n");
+        traceEvent(TRACE_ERROR, "No Windows TAP device found!");
         exit(0);
     }
 
@@ -231,21 +236,25 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     /* Try to open the corresponding tap device->device_name */
 
     if(device->device_handle == INVALID_HANDLE_VALUE) {
-        _snwprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAP_WIN_SUFFIX, device->device_name);
-        device->device_handle = CreateFile(tapname, GENERIC_WRITE | GENERIC_READ, 0, 0,
-                                           OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
+        swprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAP_WIN_SUFFIX, device->device_name);
+        device->device_handle = CreateFile(
+            tapname, GENERIC_WRITE | GENERIC_READ, 0, 0,
+            OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0
+        );
     }
 
     if(device->device_handle == INVALID_HANDLE_VALUE) {
-        printf("%ls is not a usable Windows tap device\n", device->device_name);
+        traceEvent(TRACE_ERROR, "%ls is not a usable Windows TAP device", device->device_name);
         exit(-1);
     }
 
     /* Get MAC address from tap device->device_name */
-    if(!DeviceIoControl(device->device_handle, TAP_WIN_IOCTL_GET_MAC,
-                        device->mac_addr, sizeof(device->mac_addr),
-                        device->mac_addr, sizeof(device->mac_addr), &len, 0)) {
-        printf("Could not get MAC address from Windows tap %ls\n", device->device_name);
+    if(!DeviceIoControl(
+        device->device_handle, TAP_WIN_IOCTL_GET_MAC,
+        device->mac_addr, sizeof(device->mac_addr),
+        device->mac_addr, sizeof(device->mac_addr), &len, 0)
+    ) {
+        traceEvent(TRACE_ERROR, "Could not get MAC address from Windows TAP %ls", device->device_name);
         return -1;
     }
 
@@ -274,12 +283,9 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
 
     /* printf("Setting %ls device address...\n", device->device_name); */
 
-    if (config->dyn_ip4)
-    {
+    if (config->dyn_ip4) {
         rc = set_dhcp(device);
-    }
-    else
-    {        
+    } else {        
         rc = set_static_ip_address(device);
     }
 
@@ -287,20 +293,25 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         tuntap_get_address(device);
     } else {
         W32_ERROR(rc, error)
-        printf("WARNING: Unable to set device %ls IP address: %ls", device->device_name, error);
+        traceEvent(TRACE_WARNING, "Unable to set device %ls IP address: %u", device->device_name, error);
         W32_ERROR_FREE(error)
     }
 
     /* ****************** */
 
     if(device->mtu != DEFAULT_MTU)
-        printf("WARNING: MTU set is not supported on Windows\n");
+        traceEvent(TRACE_WARNING, "MTU set is not supported on Windows");
 
     /* set driver media status to 'connected' (i.e. set the interface up) */
-    if (!DeviceIoControl (device->device_handle, TAP_WIN_IOCTL_SET_MEDIA_STATUS,
-                          &status, sizeof (status),
-                          &status, sizeof (status), &len, NULL))
-        printf("WARNING: Unable to enable TAP adapter\n");
+    if (!DeviceIoControl(
+        device->device_handle, TAP_WIN_IOCTL_SET_MEDIA_STATUS,
+        &status, sizeof (status),
+        &status, sizeof (status), &len, NULL
+    )) {
+        W32_ERROR(GetLastError(), error)
+        traceEvent(TRACE_ERROR, "Unable to enable TAP adapter %ls: %ls", device->device_name, error);
+        W32_ERROR_FREE(error)
+    }
 
     /*
     * Initialize overlapped structures
@@ -330,9 +341,12 @@ ssize_t tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) {
         GetOverlappedResult(tuntap->device_handle, &tuntap->overlap_read, &read_size, FALSE);
         return (ssize_t) read_size;
         break;
-    default:
-        printf("GetLastError() returned %d\n", last_err);
+    default: {
+        W32_ERROR(last_err, error)
+        traceEvent(TRACE_ERROR, "ReadFile from TAP: %ls", error);
+        W32_ERROR_FREE(error)
         break;
+    }
     }
 
   return -1;

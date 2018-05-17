@@ -165,7 +165,7 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
         } else {
             /* running as a service */
             wchar_t out[640];
-            _snwprintf(out, sizeof(out), L"%hs%hs", extra_msg, buf);
+            swprintf(out, sizeof(out), L"%hs%hs", extra_msg, buf);
 
             wchar_t* msg[] = {
                 scm_name,
