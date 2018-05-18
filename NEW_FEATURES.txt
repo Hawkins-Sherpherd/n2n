@@ -11,9 +11,9 @@ Additions:
 * AES uses EVP for Hardware acceleration instead of pure software implementation
 
 Future:
-* IPv6 for inner and outer transport
+* IPv6 for inner and outer transport (still working on)
 * NetBSD/FreeBSD (might got broken, was never checked)
 * Other Ciphers
 * Better Documentation
 * Code cleanup
-* Windows WSA error codes instead of errno/strerror
+* Windows Eventlog manifest (for Running as a Windows SCM Service)
