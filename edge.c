@@ -443,12 +443,12 @@ static int edge_init_keyschedule( n2n_edge_t * eee )
 /** Deinitialise the edge and deallocate any owned memory. */
 static void edge_deinit(n2n_edge_t * eee)
 {
-    if ( eee->udp_sock >=0 )
+    if ( eee->udp_sock != -1 )
     {
         closesocket( eee->udp_sock );
     }
 
-    if ( eee->udp_mgmt_sock >= 0 )
+    if ( eee->udp_mgmt_sock != -1 )
     {
         closesocket(eee->udp_mgmt_sock);
     }
@@ -1653,7 +1653,7 @@ static void readFromIPSocket( n2n_edge_t * eee )
 
     i = sizeof(sender_sock);
     recvlen = recvfrom(eee->udp_sock, udp_buf, N2N_PKT_BUF_SIZE, 0/*flags*/,
-                      (struct sockaddr*) &sender_sock, (socklen_t*)&i);
+                      (struct sockaddr*) &sender_sock, (socklen_t*) &i);
 
     if ( recvlen < 0 )
     {
@@ -1917,10 +1917,12 @@ static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn) {
                 if (inet_pton(AF_INET6, addr + 1, &sn->addr.v6) != 1) {
                     traceEvent(TRACE_WARNING, "Failed to parse supernode as IPv6 %s: %s", addr, strerror(errno));
                 }
+                sn->family = AF_INET6;
             } else {
                 if (inet_pton(AF_INET, addr, &sn->addr.v4) != 1) {
                     traceEvent(TRACE_WARNING, "Failed to parse supernode as IPv4 %s: %s", addr, strerror(errno));
                 }
+                sn->family = AF_INET;
             }
             // traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %s", addr, gai_strerror(nameerr));
         }
@@ -2484,7 +2486,7 @@ int main(int argc, char* argv[])
 
 
     eee.udp_sock = eee.supernode.family == AF_INET ? open_socket(local_port, 1 /*bind ANY*/ ) : open_socket6(local_port, 1 ) ;
-    if(eee.udp_sock < 0)
+    if(eee.udp_sock == -1)
     {
         traceEvent( TRACE_ERROR, "Failed to bind main UDP port %u", (signed int)local_port );
         return(-1);
@@ -2492,7 +2494,7 @@ int main(int argc, char* argv[])
 
     eee.udp_mgmt_sock = open_socket(mgmt_port, 0 /* bind LOOPBACK*/ );
 
-    if(eee.udp_mgmt_sock < 0)
+    if(eee.udp_mgmt_sock == -1)
     {
         traceEvent( TRACE_ERROR, "Failed to bind management UDP port %u", (unsigned int)N2N_EDGE_MGMT_PORT );
         return(-1);

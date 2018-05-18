@@ -193,7 +193,7 @@ static ssize_t sendto_sock(n2n_sn_t * sss,
 
         udpsock.sin_family = AF_INET;
         udpsock.sin_port = htons( sock->port );
-        memcpy( &(udpsock.sin_addr.s_addr), &(sock->addr.v4), IPV4_SIZE );
+        memcpy( &(udpsock.sin_addr), &(sock->addr.v4), IPV4_SIZE );
 
         traceEvent( TRACE_DEBUG, "sendto_sock %lu to %s",
                     pktsize,

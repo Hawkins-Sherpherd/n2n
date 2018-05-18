@@ -53,7 +53,7 @@ SOCKET open_socket(int local_port, int bind_any) {
     }
 
 #ifndef _WIN32
-    /* fcntl(sock_fd, F_SETFL, O_NONBLOCK); */
+    fcntl(sock_fd, F_SETFL, O_NONBLOCK);
 #endif
 
     setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&sockopt, sizeof(sockopt));
@@ -82,7 +82,7 @@ SOCKET open_socket6(int local_port, int bind_any) {
     }
 
 #ifndef _WIN32
-    /* fcntl(sock_fd, F_SETFL, O_NONBLOCK); */
+    fcntl(sock_fd, F_SETFL, O_NONBLOCK);
 #endif
 
     setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&sockopt, sizeof(sockopt));
