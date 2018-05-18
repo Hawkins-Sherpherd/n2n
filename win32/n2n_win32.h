@@ -67,8 +67,6 @@ typedef unsigned long in_addr_t;
 #undef EAFNOSUPPORT
 #endif
 #define EAFNOSUPPORT   WSAEAFNOSUPPORT
-#define MAX(a,b) (a > b ? a : b)
-#define MIN(a,b) (a < b ? a : b)
 
 #define socklen_t int
 

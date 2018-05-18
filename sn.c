@@ -799,11 +799,11 @@ static int run_loop( n2n_sn_t * sss )
         time_t now=0;
 
         FD_ZERO(&socket_mask);
-        max_sock = (int) MAX(sss->sock, sss->mgmt_sock);
+        max_sock = max(max((int) sss->sock, (int) sss->sock6), (int) sss->mgmt_sock);
 
-        if (sss->sock > 0)
+        if (sss->sock != -1)
             FD_SET(sss->sock, &socket_mask);
-        if (sss->sock6 > 0)
+        if (sss->sock6 != -1)
             FD_SET(sss->sock6, &socket_mask);
         FD_SET(sss->mgmt_sock, &socket_mask);
 

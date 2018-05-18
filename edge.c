@@ -1801,8 +1801,8 @@ static void readFromIPSocket( n2n_edge_t * eee )
 
                     /* REVISIT: store sn_back */
                     eee->register_lifetime = ra.lifetime;
-                    eee->register_lifetime = MAX( eee->register_lifetime, REGISTER_SUPER_INTERVAL_MIN );
-                    eee->register_lifetime = MIN( eee->register_lifetime, REGISTER_SUPER_INTERVAL_MAX );
+                    eee->register_lifetime = max( eee->register_lifetime, REGISTER_SUPER_INTERVAL_MIN );
+                    eee->register_lifetime = min( eee->register_lifetime, REGISTER_SUPER_INTERVAL_MAX );
                 }
                 else
                 {
@@ -1972,7 +1972,7 @@ static int scan_address( char * ip_addr, size_t addr_size,
             size_t end=0;
 
             memset(ip_mode, 0, mode_size);
-            end = MIN( p-s, (ssize_t)(mode_size-1) ); /* ensure NULL term */
+            end = min( p-s, (ssize_t)(mode_size-1) ); /* ensure NULL term */
             strncpy( ip_mode, s, end );
             strncpy( ip_addr, p+1, addr_size-1 ); /* ensure NULL term */
             retval = 0;
@@ -2024,7 +2024,7 @@ static int scan_address6( char * ip6_addr, size_t addr_size,
             size_t end=0;
 
             memset(ip6_prefixlen, 0, prefix_size);
-            end = MIN( p-s, (ssize_t)(addr_size-1) ); /* ensure NULL term */
+            end = min( p-s, (ssize_t)(addr_size-1) ); /* ensure NULL term */
             strncpy( ip6_addr, s, end );
             strncpy( ip6_prefixlen, p+1, prefix_size-1 ); /* ensure NULL term */
             retval = 0;
