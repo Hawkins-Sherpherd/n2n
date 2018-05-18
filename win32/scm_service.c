@@ -94,7 +94,7 @@ int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
     wchar_t data[ARGUMENT_LENGTH];
     DWORD len = ARGUMENT_LENGTH;
     DWORD type = 0;
-    if (RegGetValue(key, NULL, L"Arguments", RRF_RT_REG_SZ, &type, &data, &len)) {
+    if (RegGetValue(key, NULL, L"Arguments", RRF_RT_REG_SZ | RRF_RT_REG_MULTI_SZ, &type, &data, &len)) {
         W32_ERROR(GetLastError(), error)
         traceEvent(TRACE_ERROR, "Registry key HKLM\\%ls has no string value 'Arguments': %ls", regpath, error);
         W32_ERROR_FREE(error);
@@ -137,6 +137,24 @@ int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
                 argc++;
                 break;
             }
+        }
+    } else if (type == REG_MULTI_SZ) {
+        wchar_t* buffer = data;
+
+        while(*buffer) {
+            buffer_size = (wcslen(buffer) + 1);
+            (*argv)[argc] = malloc(buffer_size);
+            wcstombs((*argv)[argc], buffer, buffer_size);
+            argc++;
+            if (argc >= maxargc) {
+                maxargc *= 2;
+                *argv = (char **) realloc(*argv, maxargc * sizeof(char*));
+                if (*argv == NULL) {
+                    traceEvent(TRACE_ERROR, "Unable to re-allocate memory");
+                    return 0;
+                }
+            }
+            buffer = buffer + buffer_size;
         }
     } else {
         traceEvent(TRACE_ERROR, "Registry value HKLM\\%ls\\Arguments is of unknown type %u", regpath, type);
