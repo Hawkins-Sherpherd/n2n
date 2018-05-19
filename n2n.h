@@ -115,6 +115,7 @@ struct ether_hdr
 #if defined(__GNUC__)
 __attribute__ ((__packed__));
 #elif defined(_MSC_VER)
+;
 #pragma pack(pop)
 #endif
 
