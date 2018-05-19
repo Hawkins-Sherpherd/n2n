@@ -10,6 +10,8 @@ if (Get-Service -Name $instanceName) {
     Stop-Service -Name $instanceName | Out-Null
     # a cmdlet is only available for PWSH 6+
     & "$env:SystemRoot\System32\sc.exe" delete $instanceName | Out-Null
+} else {
+    Write-Host -ForegroundColor Green "Could not find existing service '$instanceName', this is ok, if it was not installed."
 }
 
 # create a new program folder
@@ -18,7 +20,12 @@ if (!(Test-Path -Path "$binaryPath" -Type Container)) {
 }
 
 # copy the edge executable
-Copy-Item "$binaryName" "$binaryPath\$binaryName"
+Try {
+    Copy-Item "$binaryName" "$binaryPath\$binaryName"    
+} Catch {
+    Write-Host -ForegroundColor Red "$instanceName cannot be installed: $_"
+    Return
+}
 
 # create a new service with manual startup type
 New-Service -Name $instanceName -BinaryPathName "$binaryPath\$binaryName" -StartupType Manual | Out-Null
@@ -35,6 +42,15 @@ if (!(Test-Path -Path "HKLM:\SOFTWARE\n2n\$instanceName" -PathType Container)) {
 
 # add or update the value in the registry key
 New-ItemProperty -Path "HKLM:\SOFTWARE\n2n\$instanceName" -Name "Arguments" -PropertyType MultiString -Value $arguments -Force | Out-Null
+
+# install application resource for event log messages (needed so eventlog actually display something)
+$eventLog = "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\$instanceName"
+if (!(Test-Path -Path $eventLog -PathType Container)) {
+    New-Item -Type Directory -Path $eventLog | Out-Null
+}
+
+New-ItemProperty -Path $eventLog -Name "EventMessageFile" -PropertyType String -Value "$binaryPath\$binaryName" -Force | Out-Null
+New-ItemProperty -Path $eventLog -Name "TypesSupported" -PropertyType DWORD -Value 0x7 -Force | Out-Null
 
 # start the service
 #Start-Service $instanceName
@@ -55,4 +71,4 @@ $arguments_edge = @(
 )
 
 Install-ServiceInstance "edge.exe" "edge" $arguments_edge
-Install-ServiceInstance "supernode.exe" "supernode"  @("-6", "-l", "4385")
+Install-ServiceInstance "supernode.exe" "supernode"  @("-4", "-6", "-l", "4385")

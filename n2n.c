@@ -109,7 +109,7 @@ bool useSyslog = false, syslog_opened = false, useSystemd = false;
 void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
     va_list va_ap;
 
-  if(eventTraceLevel <= traceLevel) {
+    if(eventTraceLevel <= traceLevel) {
         char buf[2048];
         char out_buf[640];
         char theDate[N2N_TRACE_DATESIZE];
@@ -180,7 +180,7 @@ void traceEvent(int eventTraceLevel, char* file, int line, char * format, ...) {
             else if(eventTraceLevel == 2)
                 level = EVENTLOG_INFORMATION_TYPE;
             
-            ReportEventW(event_log, level, 0, 0, NULL, 2, 0, msg, NULL);
+            ReportEventW(event_log, level, 0, 0x40020000L, NULL, 2, 0, msg, NULL);
         }
 #endif
     }

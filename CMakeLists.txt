@@ -56,9 +56,20 @@ add_library(n2n OBJECT
 set(OBJECTS $<TARGET_OBJECTS:n2n>)
 
 if(DEFINED WIN32)
-add_subdirectory(win32)
+
+set(CMAKE_RC_FLAGS /nologo)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477 /wd4267")
+
+add_subdirectory(win32)
 set(OBJECTS ${OBJECTS} $<TARGET_OBJECTS:n2n_win32>)
+set(EDGE_RESOURCE ${CMAKE_CURRENT_SOURCE_DIR}/win32/edge.rc)
+set(SN_RESOURCE ${CMAKE_CURRENT_SOURCE_DIR}/win32/sn.rc)
+
+else(DEFINED WIN32)
+
+set(EDGE_RESOURCE )
+set(SN_RESOURCE )
+
 endif(DEFINED WIN32)
 
 if(N2N_OPTION_AES)
@@ -68,15 +79,20 @@ endif(N2N_OPTION_AES)
 # For Solaris (or OpenSolaris?)
 #target_link_libraries(n2n socket nsl)
 
-add_executable(edge edge.c ${OBJECTS})
+add_executable(edge edge.c ${OBJECTS} ${EDGE_RESOURCE})
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 target_link_libraries(edge cap)
 endif()
 
-add_executable(supernode sn.c ${OBJECTS})
+add_executable(supernode sn.c ${OBJECTS} ${SN_RESOURCE})
 if(DEFINED WIN32)
 set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/win32/install.ps1" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+add_custom_command(
+        TARGET supernode
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/win32/install.ps1" "${CMAKE_CURRENT_BINARY_DIR}/install.ps1"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/win32/install.ps1"
+)
 endif(DEFINED WIN32)
 
 if(NOT DEFINED WIN32)
