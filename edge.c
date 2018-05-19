@@ -146,70 +146,72 @@ static void send_packet2net(n2n_edge_t * eee,
 
 /* parse the configuration file */
 static int readConfFile(const char * filename, char * const linebuffer) {
-  FILE    *   fd;
-  char    *   buffer = NULL;
+    FILE* fd;
+    char* buffer;
 
-  buffer = (char *)malloc(MAX_CONFFILE_LINE_LENGTH);
-  if (!buffer) {
-    traceEvent( TRACE_ERROR, "Unable to allocate memory");
-    return -1;
-  }
-
-  if (access(filename, R_OK)) {
-    if (errno == ENOENT)
-      traceEvent(TRACE_ERROR, "parameter file %s not found/unable to access\n", filename);
-    else
-      traceEvent(TRACE_ERROR, "cannot stat file %s, errno=%d\n",filename, errno);
-    free(buffer);
-    return -1;
-  }
-
-  fd = fopen(filename, "rb");
-  if (!fd) {
-    traceEvent(TRACE_ERROR, "Unable to open parameter file '%s' (%d)...\n",filename,errno);
-    free(buffer);
-    return -1;
-  }
-  while(fgets(buffer, MAX_CONFFILE_LINE_LENGTH,fd)) {
-    char    *   p = NULL;
-
-    /* strip out comments */
-    p = strchr(buffer, '#');
-    if (p) *p ='\0';
-
-    /* remove \n */
-    p = strchr(buffer, '\n');
-    if (p) *p ='\0';
-
-    /* strip out heading spaces */
-    p = buffer;
-    while (*p == ' ' && *p != '\0') ++p;
-    if (p != buffer) strcpy(buffer, p);
-
-    /* strip out trailing spaces */
-    while(strlen(buffer) && buffer[strlen(buffer)-1]==' ')
-      buffer[strlen(buffer)-1]= '\0';
-
-    /* check for nested @file option */
-    if (strchr(buffer, '@')) {
-      traceEvent(TRACE_ERROR, "@file in file nesting is not supported\n");
-      free(buffer);
-      return -1;
+    buffer = (char*) malloc(MAX_CONFFILE_LINE_LENGTH);
+    if (!buffer) {
+        traceEvent( TRACE_ERROR, "Unable to allocate memory");
+        return -1;
     }
-    if ((strlen(linebuffer) + strlen(buffer) + 2)< MAX_CMDLINE_BUFFER_LENGTH) {
-      strcat(linebuffer, " ");
-      strcat(linebuffer, buffer);
-    } else {
-      traceEvent(TRACE_ERROR, "too many argument");
-      free(buffer);
-      return -1;
+
+    if (access(filename, R_OK)) {
+        if (errno == ENOENT)
+            traceEvent(TRACE_ERROR, "parameter file %s not found/unable to access\n", filename);
+        else
+            traceEvent(TRACE_ERROR, "cannot stat file %s, %s\n",filename, strerror(errno));
+            free(buffer);
+        return -1;
     }
-  }
 
-  free(buffer);
-  fclose(fd);
+    fd = fopen(filename, "rb");
+    if (!fd) {
+        traceEvent(TRACE_ERROR, "Unable to open parameter file '%s': %s\n", filename, strerror(errno));
+        free(buffer);
+        return -1;
+    }
+    while(fgets(buffer, MAX_CONFFILE_LINE_LENGTH,fd)) {
+        char* p;
 
-  return 0;
+        /* strip out comments */
+        p = strchr(buffer, '#');
+        if (p) *p ='\0';
+
+        /* remove \n */
+        p = strchr(buffer, '\n');
+        if (p) *p ='\0';
+
+        /* strip out heading spaces */
+        p = buffer;
+        while (*p == ' ') ++p;
+        if (p != buffer) strcpy(buffer, p);
+
+        /* strip out trailing spaces */
+        while(strlen(buffer) && buffer[strlen(buffer)-1]==' ')
+        buffer[strlen(buffer)-1]= '\0';
+
+        /* check for nested @file option */
+        if (strchr(buffer, '@')) {
+            traceEvent(TRACE_ERROR, "@file in file nesting is not supported\n");
+            free(buffer);
+            fclose(fd);
+            return -1;
+        }
+        if ((strlen(linebuffer) + strlen(buffer) + 2)< MAX_CMDLINE_BUFFER_LENGTH) {
+            strcat(linebuffer, " ");
+            strcat(linebuffer, buffer);
+        } else {
+            traceEvent(TRACE_ERROR, "too many arguments");
+            free(buffer);
+            fclose(fd);
+            return -1;
+        }
+    }
+
+    free(buffer);
+    fclose(fd);
+
+    return 0;
 }
 
 /* Create the argv vector */
@@ -220,18 +222,24 @@ static char ** buildargv(int * effectiveargc, char * const linebuffer) {
     char ** argv;
     char *  buffer, * buff;
 
+    if (!linebuffer) {
+        return NULL;
+    }
+
     *effectiveargc = 0;
     buffer = (char *)calloc(1, strlen(linebuffer)+2);
     if (!buffer) {
         traceEvent( TRACE_ERROR, "Unable to allocate memory");
         return NULL;
     }
+
     strcpy(buffer, linebuffer);
 
     maxargc = INITIAL_MAXARGC;
     argv = (char **)malloc(maxargc * sizeof(char*));
     if (argv == NULL) {
         traceEvent( TRACE_ERROR, "Unable to allocate memory");
+        free(buffer);
         return NULL;
     }
     buff = buffer;
@@ -240,15 +248,18 @@ static char ** buildargv(int * effectiveargc, char * const linebuffer) {
         if (p) {
             *p='\0';
             argv[argc++] = strdup(buff);
-            while(*++p == ' ' && *p != '\0');
+            while(*++p == ' ');
             buff=p;
             if (argc >= maxargc) {
                 maxargc *= 2;
-                argv = (char **)realloc(argv, maxargc * sizeof(char*));
-                if (argv == NULL) {
+                char** new_argv = (char **)realloc(argv, maxargc * sizeof(char*));
+                if (new_argv == NULL) {
                     traceEvent(TRACE_ERROR, "Unable to re-allocate memory");
+                    free(argv);
                     free(buffer);
                     return NULL;
+                } else {
+                    argv = new_argv;
                 }
             }
         } else {
@@ -524,8 +535,6 @@ static void help() {
 
     printf("\nEnvironment variables:\n");
     printf("  N2N_KEY                | Encryption key (ASCII). Not with -K or -k.\n" );
-
-    exit(0);
 }
 
 
@@ -723,12 +732,12 @@ void try_send_register( n2n_edge_t * eee,
 {
     /* REVISIT: purge of pending_peers not yet done. */
     struct peer_info * scan = find_peer_by_mac( eee->pending_peers, mac );
-    macstr_t mac_buf;
-    n2n_sock_str_t sockbuf;
 
-    if ( NULL == scan )
-    {
-        scan = calloc( 1, sizeof( struct peer_info ) );
+    if ( NULL == scan ) {
+        macstr_t mac_buf;
+        n2n_sock_str_t sockbuf;
+        
+        scan = (struct peer_info*) calloc( 1, sizeof( struct peer_info ) );
 
         memcpy(scan->mac_addr, mac, N2N_MAC_SIZE);
         scan->sock = *peer;
@@ -748,9 +757,7 @@ void try_send_register( n2n_edge_t * eee,
         send_register(eee, &(scan->sock) );
 
         /* pending_peers now owns scan. */
-    }
-    else
-    {
+    } else {
     }
 }
 
@@ -763,13 +770,10 @@ void check_peer( n2n_edge_t * eee,
 {
     struct peer_info * scan = find_peer_by_mac( eee->known_peers, mac );
 
-    if ( NULL == scan )
-    {
+    if ( NULL == scan ) {
         /* Not in known_peers - start the REGISTER process. */
         try_send_register( eee, from_supernode, mac, peer );
-    }
-    else
-    {
+    } else {
         /* Already in known_peers. */
         update_peer_address( eee, from_supernode, mac, peer, time(NULL) );
     }
@@ -797,10 +801,8 @@ void set_peer_operational( n2n_edge_t * eee,
 
     scan=eee->pending_peers;
 
-    while ( NULL != scan )
-    {
-        if ( 0 == memcmp( scan->mac_addr, mac, N2N_MAC_SIZE ) )
-        {
+    while ( NULL != scan ) {
+        if ( 0 == memcmp( scan->mac_addr, mac, N2N_MAC_SIZE ) ) {
             break; /* found. */
         }
 
@@ -808,17 +810,13 @@ void set_peer_operational( n2n_edge_t * eee,
         scan = scan->next;
     }
 
-    if ( scan )
-    {
+    if ( scan ) {
 
 
         /* Remove scan from pending_peers. */
-        if ( prev )
-        {
+        if ( prev ) {
             prev->next = scan->next;
-        }
-        else
-        {
+        } else {
             eee->pending_peers = scan->next;
         }
 
@@ -840,9 +838,7 @@ void set_peer_operational( n2n_edge_t * eee,
 
 
         scan->last_seen = time(NULL);
-    }
-    else
-    {
+    } else {
         traceEvent( TRACE_DEBUG, "Failed to find sender in pending_peers." );
     }
 }
@@ -1445,7 +1441,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 {
     uint8_t             udp_buf[N2N_PKT_BUF_SIZE];      /* Compete UDP packet */
     ssize_t             recvlen;
-    ssize_t             sendlen __unused;
+    _unused_ ssize_t    sendlen;
     struct sockaddr_in  sender_sock;
     socklen_t           i;
     size_t              msg_len;
@@ -2317,7 +2313,7 @@ int main(int argc, char* argv[])
         case 'h': /* help */
         {
             help();
-            break;
+            exit(0);
         }
 
         case 'v': /* verbose */
@@ -2388,6 +2384,7 @@ int main(int argc, char* argv[])
         (ip_addr[0] != 0)
     ) ) {
         help();
+        exit(1);
     }
 
     if ( (NULL == encrypt_key ) && ( 0 == strlen(eee.keyschedule)) ) {
@@ -2543,10 +2540,10 @@ static int run_loop(n2n_edge_t * eee )
         FD_ZERO(&socket_mask);
         FD_SET(eee->udp_sock, &socket_mask);
         FD_SET(eee->udp_mgmt_sock, &socket_mask);
-        max_sock = (int) max( eee->udp_sock, eee->udp_mgmt_sock );
+        max_sock = max((int) eee->udp_sock, (int) eee->udp_mgmt_sock );
 #ifndef _WIN32
         FD_SET(eee->device.fd, &socket_mask);
-        max_sock = max( max_sock, eee->device.fd );
+        max_sock = max( (int) max_sock, (int) eee->device.fd );
 #endif
 
         wait_time.tv_sec = SOCKET_TIMEOUT_INTERVAL_SECS; wait_time.tv_usec = 0;

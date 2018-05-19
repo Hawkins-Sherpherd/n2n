@@ -85,18 +85,7 @@
 #include <syslog.h>
 #include <sys/wait.h>
 
-#define ETH_ADDR_LEN 6
-struct ether_hdr
-{
-    uint8_t  dhost[ETH_ADDR_LEN];
-    uint8_t  shost[ETH_ADDR_LEN];
-    uint16_t type;                /* higher layer protocol encapsulated */
-} __attribute__ ((__packed__));
-
-typedef struct ether_hdr ether_hdr_t;
-
 #ifdef __sun__
-#include <sys/sysmacros.h> /* MIN() and MAX() declared here */
 #undef N2N_HAVE_DAEMON
 #endif /* #ifdef __sun__ */
 
@@ -111,13 +100,33 @@ typedef struct ether_hdr ether_hdr_t;
 #define closesocket(a) close(a)
 #endif /* #ifndef _WIN32 */
 
+#define ETH_ADDR_LEN 6
+
+#if defined(_MSC_VER)
+#pragma pack(push,1)
+#endif
+struct ether_hdr
+{
+    uint8_t  dhost[ETH_ADDR_LEN];
+    uint8_t  shost[ETH_ADDR_LEN];
+    /* higher layer protocol encapsulated */
+    uint16_t type;
+}
+#if defined(__GNUC__)
+__attribute__ ((__packed__));
+#elif defined(_MSC_VER)
+#pragma pack(pop)
+#endif
+
+typedef struct ether_hdr ether_hdr_t;
+
 #include <string.h>
 #include <stdarg.h>
 
 #ifdef __GNUC__
-#define __unused __attribute__((unused))
+#define _unused_ __attribute__((unused))
 #else
-#define __unused
+#define _unused_
 #endif
 
 #ifdef WIN32
@@ -236,8 +245,8 @@ extern ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_
 extern void tuntap_close(struct tuntap_dev *tuntap);
 extern void tuntap_get_address(struct tuntap_dev *tuntap);
 
-extern SOCKET open_socket(int local_port, int bind_any);
-extern SOCKET open_socket6(int local_port, int bind_any);
+extern SOCKET open_socket(uint16_t local_port, int bind_any);
+extern SOCKET open_socket6(uint16_t local_port, int bind_any);
 
 extern char* macaddr_str(macstr_t buf, const n2n_mac_t mac);
 extern char * sock_to_cstr( n2n_sock_str_t out,
@@ -257,7 +266,7 @@ void print_n2n_version();
 struct peer_info * find_peer_by_mac( struct peer_info * list,
                                      const n2n_mac_t mac );
 void   peer_list_add( struct peer_info * * list,
-                      struct peer_info * new );
+                      struct peer_info * element );
 size_t peer_list_size( const struct peer_info * list );
 size_t purge_peer_list( struct peer_info ** peer_list, 
                         time_t purge_before );

@@ -164,12 +164,12 @@ ssize_t decode_common( n2n_common_t * out,
     
     decode_uint8( &(out->ttl), base, rem, idx );
     decode_uint16( &(out->flags), base, rem, idx );
-    out->pc = ( out->flags & N2N_FLAGS_TYPE_MASK );
+    out->pc = (n2n_pc_t) ( out->flags & N2N_FLAGS_TYPE_MASK );
     out->flags &= N2N_FLAGS_BITS_MASK;
 
     decode_buf( out->community, N2N_COMMUNITY_SIZE, base, rem, idx );
 
-    return (*idx - idx0);
+    return ((ssize_t) (*idx)) - (ssize_t) idx0;
 }
 
 

@@ -674,7 +674,7 @@ static int process_udp( n2n_sn_t * sss,
 
 
 /** Help message to print if the command line arguments are not valid. */
-static void exit_help(int argc, char * const argv[])
+static void help(int argc, char * const argv[])
 {
     fprintf( stderr, "%s usage\n", argv[0] );
     fprintf( stderr, "-l <lport>\tSet UDP main listen port to <lport>\n" );
@@ -686,7 +686,6 @@ static void exit_help(int argc, char * const argv[])
     fprintf( stderr, "-v        \tIncrease verbosity. Can be used multiple times.\n" );
     fprintf( stderr, "-h        \tThis help message.\n" );
     fprintf( stderr, "\n" );
-    exit(1);
 }
 
 static int run_loop( n2n_sn_t * sss );
@@ -738,8 +737,8 @@ int main( int argc, char * const argv[] )
                 ipv6 = true;
                 break;
             case 'h': /* help */
-                exit_help(argc, argv);
-                break;
+                help(argc, argv);
+                exit(0);
             case 'v': /* verbose */
                 ++traceLevel;
                 break;

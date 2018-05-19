@@ -7,6 +7,8 @@
 #ifndef _N2N_WIN32_H_
 #define _N2N_WIN32_H_
 
+#ifdef _WIN32
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_NONSTDC_NO_DEPRECATE
 
@@ -70,43 +72,6 @@ typedef unsigned long in_addr_t;
 
 #define socklen_t int
 
-#define ETH_ADDR_LEN 6
-/*                                                                                                                                                                                     
- * Structure of a 10Mb/s Ethernet header.                                                                                                                                              
- */
-struct ether_hdr
-{
-    uint8_t  dhost[ETH_ADDR_LEN];
-    uint8_t  shost[ETH_ADDR_LEN];
-    uint16_t type;                /* higher layer protocol encapsulated */
-};
-
-typedef struct ether_hdr ether_hdr_t;
-
-/* ************************************* */
-
-struct ip {
-#if BYTE_ORDER == LITTLE_ENDIAN
-        u_char  ip_hl:4,                /* header length */
-                ip_v:4;                 /* version */
-#else
-        u_char  ip_v:4,                 /* version */
-                ip_hl:4;                /* header length */
-#endif
-        u_char  ip_tos;                 /* type of service */
-        short   ip_len;                 /* total length */
-        u_short ip_id;                  /* identification */
-        short   ip_off;                 /* fragment offset field */
-#define IP_DF 0x4000                    /* dont fragment flag */
-#define IP_MF 0x2000                    /* more fragments flag */
-#define IP_OFFMASK 0x1fff               /* mask for fragmenting bits */
-        u_char  ip_ttl;                 /* time to live */
-        u_char  ip_p;                   /* protocol */
-        u_short ip_sum;                 /* checksum */
-        struct  in_addr ip_src,ip_dst;  /* source and dest address */
-};
-
-
 /* ************************************* */
 
 typedef struct tuntap_dev {
@@ -136,4 +101,5 @@ void initWin32();
 
 int scm_startup(wchar_t* name);
 
+#endif /* _WIN32 */
 #endif

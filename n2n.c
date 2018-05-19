@@ -42,7 +42,7 @@ const uint8_t ipv6_multicast_addr[6] = { 0x33, 0x33, 0x00, 0x00, 0x00, 0x00 }; /
 
 /* ************************************** */
 
-SOCKET open_socket(int local_port, int bind_any) {
+SOCKET open_socket(uint16_t local_port, int bind_any) {
     SOCKET sock_fd;
     struct sockaddr_in local_address;
     int sockopt = 1;
@@ -71,7 +71,7 @@ SOCKET open_socket(int local_port, int bind_any) {
     return sock_fd;
 }
 
-SOCKET open_socket6(int local_port, int bind_any) {
+SOCKET open_socket6(uint16_t local_port, int bind_any) {
     SOCKET sock_fd;
     struct sockaddr_in6 local_address;
     int sockopt = 1;
@@ -217,18 +217,16 @@ uint8_t is_multi_broadcast(const uint8_t * dest_mac) {
 
 char* msg_type2str(uint16_t msg_type) {
     switch(msg_type) {
-        case MSG_TYPE_REGISTER: return("MSG_TYPE_REGISTER");
-        case MSG_TYPE_DEREGISTER: return("MSG_TYPE_DEREGISTER");
-        case MSG_TYPE_PACKET: return("MSG_TYPE_PACKET");
-        case MSG_TYPE_REGISTER_ACK: return("MSG_TYPE_REGISTER_ACK");
-        case MSG_TYPE_REGISTER_SUPER: return("MSG_TYPE_REGISTER_SUPER");
-        case MSG_TYPE_REGISTER_SUPER_ACK: return("MSG_TYPE_REGISTER_SUPER_ACK");
-        case MSG_TYPE_REGISTER_SUPER_NAK: return("MSG_TYPE_REGISTER_SUPER_NAK");
-        case MSG_TYPE_FEDERATION: return("MSG_TYPE_FEDERATION");
-        default: return("???");
+        case MSG_TYPE_REGISTER: return "MSG_TYPE_REGISTER";
+        case MSG_TYPE_DEREGISTER: return "MSG_TYPE_DEREGISTER";
+        case MSG_TYPE_PACKET: return "MSG_TYPE_PACKET";
+        case MSG_TYPE_REGISTER_ACK: return "MSG_TYPE_REGISTER_ACK";
+        case MSG_TYPE_REGISTER_SUPER: return "MSG_TYPE_REGISTER_SUPER";
+        case MSG_TYPE_REGISTER_SUPER_ACK: return "MSG_TYPE_REGISTER_SUPER_ACK";
+        case MSG_TYPE_REGISTER_SUPER_NAK: return "MSG_TYPE_REGISTER_SUPER_NAK";
+        case MSG_TYPE_FEDERATION: return "MSG_TYPE_FEDERATION";
+        default: return "???";
     }
-
-    return("???");
 }
 
 /* *********************************************** */
@@ -253,7 +251,8 @@ void hexdump(const uint8_t * buf, size_t len)
 void print_n2n_version() {
   printf("Welcome to n2n v.%s for %s\n"
          "Built on %s\n"
-	 "Copyright 2007-09 - http://www.ntop.org\n\n",
+	     "Copyright 2007-09 - http://www.ntop.org\n"
+         "Copyright 2018 - https://github.org/mxre/n2n\n\n",
          n2n_sw_version, n2n_sw_osName, n2n_sw_buildDate);
 }
 
@@ -286,10 +285,9 @@ struct peer_info * find_peer_by_mac( struct peer_info * list, const n2n_mac_t ma
  */
 size_t peer_list_size( const struct peer_info * list )
 {
-  size_t retval=0;
+    size_t retval=0;
 
-  while ( list )
-    {
+    while ( list ) {
       ++retval;
       list = list->next;
     }
@@ -302,30 +300,31 @@ size_t peer_list_size( const struct peer_info * list )
  *  The item new is added to the head of the list. New is modified during
  *  insertion. list takes ownership of new.
  */
-void peer_list_add( struct peer_info * * list,
-                    struct peer_info * new )
+void peer_list_add(struct peer_info * * list,
+                   struct peer_info * element )
 {
-  new->next = *list;
-  new->last_seen = time(NULL);
-  *list = new;
+    element->next = *list;
+    element->last_seen = time(NULL);
+    *list = element;
 }
 
 
 size_t purge_expired_registrations( struct peer_info ** peer_list ) {
-  static time_t last_purge = 0;
-  time_t now = time(NULL);
-  size_t num_reg = 0;
+    static time_t last_purge = 0;
+    time_t now = time(NULL);
+    size_t num_reg = 0;
 
-  if((now - last_purge) < PURGE_REGISTRATION_FREQUENCY) return 0;
+    if ((now - last_purge) < PURGE_REGISTRATION_FREQUENCY)
+        return 0;
 
-  traceEvent(TRACE_INFO, "Purging old registrations");
+    traceEvent(TRACE_INFO, "Purging old registrations");
 
-  num_reg = purge_peer_list( peer_list, now-REGISTRATION_TIMEOUT );
+    num_reg = purge_peer_list( peer_list, now-REGISTRATION_TIMEOUT );
 
-  last_purge = now;
-  traceEvent(TRACE_INFO, "Remove %ld registrations", num_reg);
+    last_purge = now;
+    traceEvent(TRACE_INFO, "Remove %ld registrations", num_reg);
 
-  return num_reg;
+    return num_reg;
 }
 
 /** Purge old items from the peer_list and return the number of items that were removed. */

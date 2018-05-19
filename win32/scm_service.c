@@ -1,6 +1,8 @@
 #include "../n2n.h"
 #include "n2n_win32.h"
 
+#ifdef _WIN32
+
 static SERVICE_STATUS_HANDLE service_status_handle;
 static SERVICE_STATUS service_status;
 
@@ -185,3 +187,5 @@ int scm_start_service(DWORD num, LPWSTR* args) {
     else
         return main(argc, argv);
 }
+
+#endif /* _WIN32 */

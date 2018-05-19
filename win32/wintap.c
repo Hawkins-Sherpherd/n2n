@@ -5,6 +5,8 @@
 #include "../n2n.h"
 #include "n2n_win32.h"
 
+#ifdef _WIN32
+
 /* 1500 bytes payload + 14 bytes ethernet header + 4 bytes VLAN tag */
 #define MTU 1518
 /* TODO error messages using the same framework as the rest of the program */
@@ -470,3 +472,5 @@ int main(int argc, char* argv[]) {
 }
 
 #endif
+
+#endif /* _WIN32 */
