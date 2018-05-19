@@ -204,13 +204,13 @@ static ssize_t sendto_sock(n2n_sn_t * sss,
     }
     else if ( AF_INET6 == sock->family )
     {
-        struct sockaddr_in6 udpsock;
+        struct sockaddr_in6 udpsock = { 0 };
 
         udpsock.sin6_family = AF_INET6;
         udpsock.sin6_port = htons( sock->port );
         memcpy( &(udpsock.sin6_addr), &(sock->addr.v6), IPV6_SIZE );
 
-        traceEvent( TRACE_DEBUG, "sendto_sock %lu to %s",
+        traceEvent( TRACE_DEBUG, "sendto_sock6 %lu to %s",
                     pktsize,
                     sock_to_cstr( sockbuf, sock ) );
 
@@ -257,11 +257,22 @@ static int try_forward( n2n_sn_t * sss,
         else
         {
             ++(sss->stats.errors);
+#ifdef _WIN32
+            DWORD err = WSAGetLastError();
+            W32_ERROR(err, error);
+            traceEvent(TRACE_ERROR, "unicast %lu to [%s] %s FAILED (%d: %ls)",
+                       pktsize,
+                       sock_to_cstr( sockbuf, &(scan->sock) ),
+                       macaddr_str(mac_buf, scan->mac_addr),
+                       err, error );
+            W32_ERROR_FREE(error);
+#else
             traceEvent(TRACE_ERROR, "unicast %lu to [%s] %s FAILED (%d: %s)",
                        pktsize,
                        sock_to_cstr( sockbuf, &(scan->sock) ),
                        macaddr_str(mac_buf, scan->mac_addr),
                        errno, strerror(errno) );
+#endif
         }
     }
     else
@@ -306,11 +317,21 @@ static int try_broadcast( n2n_sn_t * sss,
             if(data_sent_len != pktsize)
             {
                 ++(sss->stats.errors);
+#ifdef _WIN32
+                W32_ERROR(WSAGetLastError(), error);
+                traceEvent(TRACE_WARNING, "multicast %lu to %s %s failed %ls",
+                           pktsize,
+                           sock_to_cstr( sockbuf, &(scan->sock) ),
+                           macaddr_str(mac_buf, scan->mac_addr),
+                           error);
+                W32_ERROR_FREE(error);
+#else
                 traceEvent(TRACE_WARNING, "multicast %lu to %s %s failed %s",
                            pktsize,
                            sock_to_cstr( sockbuf, &(scan->sock) ),
                            macaddr_str(mac_buf, scan->mac_addr),
                            strerror(errno));
+#endif
             }
             else 
             {
@@ -386,7 +407,13 @@ static int process_mgmt( n2n_sn_t * sss,
     if ( r <= 0 )
     {
         ++(sss->stats.errors);
+#ifdef _WIN32
+        W32_ERROR(WSAGetLastError(), error);
+        traceEvent( TRACE_ERROR, "process_mgmt : sendto failed. %ls", error );
+        W32_ERROR_FREE(error);
+#else
         traceEvent( TRACE_ERROR, "process_mgmt : sendto failed. %s", strerror(errno) );
+#endif
     }
 
     return 0;
@@ -742,7 +769,13 @@ int main( int argc, char * const argv[] )
         sss.sock = open_socket(sss.lport, 1 /*bind ANY*/ );
         if ( -1 == sss.sock )
         {
-            traceEvent( TRACE_ERROR, "Failed to open main socket. %s", strerror(errno) );
+#ifdef _WIN32
+            W32_ERROR(WSAGetLastError(), error);
+            traceEvent( TRACE_ERROR, "Failed to open main IPv4 socket. %ls", error );
+            W32_ERROR_FREE(error);
+#else
+            traceEvent( TRACE_ERROR, "Failed to open main IPv4 socket. %s", strerror(errno) );
+#endif
             exit(-2);
         }
         else
@@ -754,7 +787,13 @@ int main( int argc, char * const argv[] )
         sss.sock6 = open_socket6(sss.lport, 1 /*bind ANY*/ );
         if ( -1 == sss.sock6 )
         {
-            traceEvent( TRACE_ERROR, "Failed to open main socket. %s", strerror(errno) );
+#ifdef _WIN32
+            W32_ERROR(WSAGetLastError(), error);
+            traceEvent( TRACE_ERROR, "Failed to open main IPv6 socket. %ls", error );
+            W32_ERROR_FREE(error);
+#else
+            traceEvent( TRACE_ERROR, "Failed to open main IPv6 socket. %s", strerror(errno) );
+#endif
             exit(-2);
         }
         else
@@ -766,7 +805,13 @@ int main( int argc, char * const argv[] )
     sss.mgmt_sock = open_socket(N2N_SN_MGMT_PORT, 0 /* bind LOOPBACK */ );
     if ( -1 == sss.mgmt_sock )
     {
+#ifdef _WIN32
+        W32_ERROR(WSAGetLastError(), error);
+        traceEvent( TRACE_ERROR, "Failed to open management socket. %ls", error );
+        W32_ERROR_FREE(error);
+#else
         traceEvent( TRACE_ERROR, "Failed to open management socket. %s", strerror(errno) );
+#endif
         exit(-2);
     }
     else
@@ -826,7 +871,14 @@ static int run_loop( n2n_sn_t * sss )
                 if ( bread < 0 ) /* For UDP bread of zero just means no data (unlike TCP). */
                 {
                     /* The fd is no good now. Maybe we lost our interface. */
+#ifdef _WIN32
+                    DWORD err = WSAGetLastError();
+                    W32_ERROR(err, error);
+                    traceEvent( TRACE_ERROR, "recvfrom() failed %d errno %d (%ls)", bread, err, error );
+                    W32_ERROR_FREE(error);
+#else
                     traceEvent( TRACE_ERROR, "recvfrom() failed %d errno %d (%s)", bread, errno, strerror(errno) );
+#endif
                     keep_running=0;
                     break;
                 }
@@ -851,7 +903,14 @@ static int run_loop( n2n_sn_t * sss )
                 if ( bread < 0 ) /* For UDP bread of zero just means no data (unlike TCP). */
                 {
                     /* The fd is no good now. Maybe we lost our interface. */
+#ifdef _WIN32
+                    DWORD err = WSAGetLastError();
+                    W32_ERROR(err, error);
+                    traceEvent( TRACE_ERROR, "recvfrom() failed %d errno %d (%ls)", bread, err, error );
+                    W32_ERROR_FREE(error);
+#else
                     traceEvent( TRACE_ERROR, "recvfrom() failed %d errno %d (%s)", bread, errno, strerror(errno) );
+#endif
                     keep_running=0;
                     break;
                 }
@@ -875,7 +934,14 @@ static int run_loop( n2n_sn_t * sss )
 
                 if ( bread <= 0 )
                 {
+#ifdef _WIN32
+                    DWORD err = WSAGetLastError();
+                    W32_ERROR(err, error);
+                    traceEvent( TRACE_ERROR, "recvfrom() failed %d errno %d (%ls)", bread, err, error );
+                    W32_ERROR_FREE(error);
+#else
                     traceEvent( TRACE_ERROR, "recvfrom() failed %d errno %d (%s)", bread, errno, strerror(errno) );
+#endif
                     keep_running=0;
                     break;
                 }

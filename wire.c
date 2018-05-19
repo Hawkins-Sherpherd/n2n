@@ -404,6 +404,7 @@ int fill_sockaddr( struct sockaddr * addr,
     int retval=-1;
 
     memset(addr, 0, addrlen);
+
     if ( AF_INET == sock->family ) {
         if ( addrlen >= sizeof(struct sockaddr_in) ) {
             struct sockaddr_in* si = (struct sockaddr_in* )addr;

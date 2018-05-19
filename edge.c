@@ -1336,8 +1336,14 @@ static void readFromTAPSocket( n2n_edge_t * eee )
 
     if( (len <= 0) || (len > N2N_PKT_BUF_SIZE) )
     {
-        traceEvent(TRACE_WARNING, "read()=%d [%d/%s]",
-                   (signed int)len, errno, strerror(errno));
+#ifdef _WIN32
+        DWORD err = GetLastError();
+        W32_ERROR(err, error);
+        traceEvent(TRACE_WARNING, "read()=%d [%d/%ls]", (signed int)len, err, error);
+        W32_ERROR_FREE(error);
+#else
+        traceEvent(TRACE_WARNING, "read()=%d [%d/%s]", (signed int)len, errno, strerror(errno));
+#endif
     }
     else
     {
