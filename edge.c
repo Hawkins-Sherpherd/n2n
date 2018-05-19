@@ -2388,7 +2388,8 @@ int main(int argc, char* argv[])
     effectiveargc = 0;
 
     if(!(
-#ifdef N2N_CAN_NAME_IFACE
+#if N2N_CAN_NAME_IFACE && !_WIN32
+        /* windows can use a default */
         (tuntap_dev_name[0] != 0) &&
 #endif
         (eee.community_name[0] != 0) &&

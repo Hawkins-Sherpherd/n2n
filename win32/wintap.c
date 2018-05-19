@@ -162,6 +162,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     WCHAR regpath[MAX_PATH];
     WCHAR adapterid[40]; /* legnth of a CLSID is 38 */
     WCHAR adaptername[MAX_ADAPTER_NAME_LENGTH];
+    WCHAR adaptername_target[MAX_ADAPTER_NAME_LENGTH] = L"";
     WCHAR tapname[MAX_PATH];
     long len;
     int found = 0;
@@ -173,6 +174,10 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     device->device_handle = INVALID_HANDLE_VALUE;
     device->device_name[0] = L'\0';
     device->ifIdx = NET_IFINDEX_UNSPECIFIED;
+
+    if (config->if_name && config->if_name[0] != '\0') {
+        mbstowcs(adaptername_target, config->if_name, MAX_ADAPTER_NAME_LENGTH);
+    }
 
     memset(&device->luid, 0, sizeof(NET_LUID));
 
@@ -201,8 +206,8 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         if (err != 0)
             continue;
 
-        if(device->device_name[0] != L'\0') {
-            if(!wcscmp(device->device_name, adapterid)) {
+        if(adaptername_target[0] != L'\0') {
+            if(!wcscmp(adaptername_target, adaptername)) {
                 found = 1;
                 break;
             } else

@@ -74,6 +74,8 @@ typedef unsigned long in_addr_t;
 
 /* ************************************* */
 
+#define N2N_IFNAMSIZ MAX_ADAPTER_NAME_LENGTH /* 256 */
+
 typedef struct tuntap_dev {
 	HANDLE device_handle;
 	WCHAR  device_name[40]; /* legnth of a CLSID is 38 */

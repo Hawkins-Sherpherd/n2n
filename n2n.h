@@ -34,6 +34,8 @@
 #undef N2N_HAVE_SETUID
 
 #include "win32/n2n_win32.h"
+/* windows can't name an interface, but we can tell edge which to use */
+#define N2N_CAN_NAME_IFACE 1
 
 #else
 /* Some capability defaults which can be reset for particular platforms. */
@@ -137,8 +139,9 @@ typedef struct ether_hdr ether_hdr_t;
 #include "n2n_wire.h"
 
 /* N2N_IFNAMSIZ is needed on win32 even if dev_name is not used after declaration */
-#define N2N_IFNAMSIZ            16 /* 15 chars * NULL */
 #ifndef _WIN32
+#define N2N_IFNAMSIZ            16 /* 15 chars * NULL */
+
 typedef struct tuntap_dev {
   int             fd;
   uint8_t         mac_addr[6];
