@@ -37,6 +37,7 @@ static int get_adapter_luid(PWSTR device_name, NET_LUID* luid) {
 
 static DWORD set_dhcp(struct tuntap_dev* device) {
     WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
+    /* lets hope that these are big enough */
     WCHAR windows_path[128], cmd[128], netsh[256];
     DWORD rc = 0;
 
@@ -156,18 +157,19 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     HKEY key, key2;
     LONG rc;
-    WCHAR regpath[1024];
-    WCHAR adapterid[1024];
-    WCHAR tapname[1024];
+    WCHAR regpath[MAX_PATH];
+    WCHAR adapterid[40]; /* legnth of a CLSID is 38 */
+    WCHAR adaptername[MAX_ADAPTER_NAME_LENGTH];
+    WCHAR tapname[MAX_PATH];
     long len;
     int found = 0;
-    int i;
+    int i, err;
     ULONG status = TRUE;
     macstr_t mac_addr_buf;
 
     memset(device, 0, sizeof(struct tuntap_dev));
     device->device_handle = INVALID_HANDLE_VALUE;
-    device->device_name = NULL;
+    device->device_name[0] = L'\0';
     device->ifIdx = NET_IFINDEX_UNSPECIFIED;
 
     memset(&device->luid, 0, sizeof(NET_LUID));
@@ -189,10 +191,15 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         swprintf(regpath, sizeof(regpath), NETWORK_CONNECTIONS_KEY L"\\%s\\Connection", adapterid);
         if(RegOpenKeyEx(HKEY_LOCAL_MACHINE, regpath, 0, KEY_READ, &key2))
             continue;
+        
+        len = sizeof(adaptername);
+        err = RegQueryValueExW(key2, L"Name", NULL, NULL, (LPBYTE) adaptername, &len);
 
         RegCloseKey(key2);
+        if (err != 0)
+            continue;
 
-        if(device->device_name) {
+        if(device->device_name[0] != L'\0') {
             if(!wcscmp(device->device_name, adapterid)) {
                 found = 1;
                 break;
@@ -221,8 +228,8 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
 
     /* ************************************** */
 
-    if(!device->device_name)
-        device->device_name = _wcsdup(adapterid);
+    if(device->device_name[0] == '\0')
+        wcscpy(device->device_name, adapterid);
 
      if(device->ifIdx == NET_IFINDEX_UNSPECIFIED) {
         if (get_adapter_luid(adapterid, &device->luid) == 0) {
@@ -244,7 +251,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     }
 
     if(device->device_handle == INVALID_HANDLE_VALUE) {
-        traceEvent(TRACE_ERROR, "%ls is not a usable Windows TAP device", device->device_name);
+        traceEvent(TRACE_ERROR, "%ls is not a usable Windows TAP device", adaptername);
         exit(-1);
     }
 
@@ -254,7 +261,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         device->mac_addr, sizeof(device->mac_addr),
         device->mac_addr, sizeof(device->mac_addr), &len, 0)
     ) {
-        traceEvent(TRACE_ERROR, "Could not get MAC address from Windows TAP %ls", device->device_name);
+        traceEvent(TRACE_ERROR, "Could not get MAC address from Windows TAP %ls", adaptername);
         return -1;
     }
 
@@ -264,8 +271,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     device->ip6_prefixlen = config->ip6_prefixlen;
     device->mtu = config->mtu;
 
-    traceEvent(TRACE_NORMAL, "Interface %ls has MAC %s", device->device_name,
-               macaddr_str(mac_addr_buf, device->mac_addr));
+    traceEvent(TRACE_NORMAL, "Interface %ls has MAC %s", adaptername, macaddr_str(mac_addr_buf, device->mac_addr));
 #if 0
     printf("Open device [name=%ls][ip=%s][ifIdx=%u][MTU=%d][mac=%02X:%02X:%02X:%02X:%02X:%02X]\n",
            device->device_name,
@@ -293,7 +299,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         tuntap_get_address(device);
     } else {
         W32_ERROR(rc, error)
-        traceEvent(TRACE_WARNING, "Unable to set device %ls IP address: %u", device->device_name, error);
+        traceEvent(TRACE_WARNING, "Unable to set device %ls IP address: %u", adaptername, error);
         W32_ERROR_FREE(error)
     }
 
@@ -309,7 +315,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         &status, sizeof (status), &len, NULL
     )) {
         W32_ERROR(GetLastError(), error)
-        traceEvent(TRACE_ERROR, "Unable to enable TAP adapter %ls: %ls", device->device_name, error);
+        traceEvent(TRACE_ERROR, "Unable to enable TAP adapter %ls: %ls", adaptername, error);
         W32_ERROR_FREE(error)
     }
 
@@ -386,8 +392,7 @@ ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) 
 
 void tuntap_close(struct tuntap_dev *tuntap) {
     if (tuntap->device_name) {
-        free( tuntap->device_name );
-        tuntap->device_name = NULL;
+        tuntap->device_name[0] = '\0';
     }
     CloseHandle(tuntap->device_handle);
 }

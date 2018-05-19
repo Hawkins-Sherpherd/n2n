@@ -111,7 +111,7 @@ struct ip {
 
 typedef struct tuntap_dev {
 	HANDLE device_handle;
-	PWSTR  device_name;
+	WCHAR  device_name[40]; /* legnth of a CLSID is 38 */
 	NET_IFINDEX  ifIdx;
         NET_LUID luid;
 	OVERLAPPED overlap_read, overlap_write;

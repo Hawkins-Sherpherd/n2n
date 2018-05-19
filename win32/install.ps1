@@ -62,11 +62,11 @@ Write-Host -ForegroundColor Green "$binaryName installed as service $instanceNam
 # can be a string or a multistring (aka an array of strings).
 # multistrings are required for parameters with spaces in them
 $arguments_edge = @(
-    "-a", "static:192.168.231.115",
-    "-A", "fdf0:cafe:babe::73/64",
-    "-c", "mxr_111117",
-    "-l", "mxr.dtdns.net:4385",
-    "-k", "lDdBM2kghXxtBb+pNO9usGjGpaRbyxKNRMKVTuWkxqQ="
+    "-a", "static:192.168.1.1",
+    "-A", "fdf0::1/64",
+    "-c", "x",
+    "-l", "[::1]:4385",
+    "-k", "x"
     "-b"
 )
 
