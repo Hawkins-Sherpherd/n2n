@@ -2,7 +2,7 @@
 $binaryPath = "$env:ProgramFiles\n2n"
 
 # function to install a service
-Function Install-ServiceInstance($binaryName, $instanceName, $arguments)
+Function Install-ServiceInstance($binaryName, $instanceName, $arguments, $depends)
 {
 
 # stop the service
@@ -28,7 +28,11 @@ Try {
 }
 
 # create a new service with manual startup type
-New-Service -Name $instanceName -BinaryPathName "$binaryPath\$binaryName" -StartupType Manual | Out-Null
+if ($depends) {
+    New-Service -Name $instanceName -BinaryPathName "$binaryPath\$binaryName" -StartupType Manual -DependsOn $depends | Out-Null
+} else {
+    New-Service -Name $instanceName -BinaryPathName "$binaryPath\$binaryName" -StartupType Manual | Out-Null
+}
 
 # create the registry key
 if (!(Test-Path -Path "HKLM:\SOFTWARE\n2n" -PathType Container)) {
@@ -70,5 +74,5 @@ $arguments_edge = @(
     "-b"
 )
 
-Install-ServiceInstance "edge.exe" "edge" $arguments_edge
-Install-ServiceInstance "supernode.exe" "supernode"  @("-4", "-6", "-l", "4385")
+Install-ServiceInstance "edge.exe" "edge" $arguments_edge -depends "tap0901"
+Install-ServiceInstance "supernode.exe" "supernode" @("-4", "-6", "-l", "4385")
