@@ -70,9 +70,21 @@ $arguments_edge = @(
     "-A", "fdf0::1/64",
     "-c", "x",
     "-l", "[::1]:4385",
-    "-k", "x"
+    "-k", "x",
     "-b"
 )
 
+# add a dependency to edge, so that is won't get started before the TAP device
+# note that the tap0901 name might change, this is for the TAP device driver version 9
+# version 8 would be tap0801.
+
 Install-ServiceInstance "edge.exe" "edge" $arguments_edge -depends "tap0901"
 Install-ServiceInstance "supernode.exe" "supernode" @("-4", "-6", "-l", "4385")
+
+# Edge can run multiple instances (as different services), simply by giving another instance name and a different set
+# of parameters. Note that we provide a -d paramter to set a TAP interface name, this interface must exist in advance.
+# and the for mutliple edge instances to run in parallel at least the same number of TAP adapters must exist on the system.
+# The TAP driver comes with a tool to increas the number of virutal interfaces.
+
+#$arguments_edge2 = @( "-a", "static:192.168.2.1", "-c", "y", "-l", "[::1]:4385", "-k", "x", "-d", "TUNTAP2", "-b" )
+#Install-ServiceInstance "edge.exe" "edge2" $arguments_edge2 -depends "tap0901"

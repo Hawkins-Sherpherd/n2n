@@ -168,6 +168,8 @@ int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
 }
 
 int scm_start_service(DWORD num, LPWSTR* args) {
+    wcsncpy(scm_name, args[0], 16);
+
     service_status_handle = RegisterServiceCtrlHandlerW(scm_name, service_handler);
     event_log = RegisterEventSource(NULL, scm_name);
 
