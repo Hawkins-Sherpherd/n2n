@@ -14,10 +14,10 @@ extern int main(int argc, char* argv[]);
 
 int scm_start_service(DWORD, LPWSTR*);
 
-wchar_t scm_name[16];
+wchar_t scm_name[_SCM_NAME_LENGTH];
 
 int scm_startup(wchar_t* name) {
-    wcsncpy(scm_name, name, 16);
+    wcsncpy(scm_name, name, _SCM_NAME_LENGTH);
 
     SERVICE_TABLE_ENTRYW dispatch_table[] =
     {
@@ -168,7 +168,7 @@ int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
 }
 
 int scm_start_service(DWORD num, LPWSTR* args) {
-    wcsncpy(scm_name, args[0], 16);
+    wcsncpy(scm_name, args[0], _SCM_NAME_LENGTH);
 
     service_status_handle = RegisterServiceCtrlHandlerW(scm_name, service_handler);
     event_log = RegisterEventSource(NULL, scm_name);
@@ -185,9 +185,13 @@ int scm_start_service(DWORD num, LPWSTR* args) {
         ReportSvcStatus(SERVICE_STOP_PENDING, ERROR_BAD_CONFIGURATION, 500);
         ReportSvcStatus(SERVICE_STOPPED, ERROR_BAD_CONFIGURATION, 0);
         return -1;
-    }
-    else
+    } else {
+        /*
+         * note that memory allocated for argv WILL leak, but the program
+         * exits directly after running main, so ...
+         */
         return main(argc, argv);
+    }
 }
 
 #endif /* _WIN32 */

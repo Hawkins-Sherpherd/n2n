@@ -80,12 +80,12 @@ typedef struct tuntap_dev {
 	HANDLE device_handle;
 	WCHAR  device_name[40]; /* legnth of a CLSID is 38 */
 	NET_IFINDEX  ifIdx;
-        NET_LUID luid;
+	NET_LUID luid;
 	OVERLAPPED overlap_read, overlap_write;
 	uint8_t      mac_addr[6];
 	uint32_t     ip_addr, device_mask;
-        struct in6_addr ip6_addr;
-        uint8_t      ip6_prefixlen;
+	struct in6_addr ip6_addr;
+	uint8_t      ip6_prefixlen;
 	unsigned int mtu;
 } tuntap_dev;
 
@@ -98,7 +98,8 @@ typedef struct tuntap_dev {
 
 extern HANDLE event_log;
 
-extern wchar_t scm_name[16];
+#define _SCM_NAME_LENGTH 128
+extern wchar_t scm_name[_SCM_NAME_LENGTH];
 
 void initWin32();
 

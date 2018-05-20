@@ -22,9 +22,7 @@ Note that `-u`, `-g` and `-f` options are not available for Windows.
 When running edge on Windows a compatile TAP network interface is required, the driver is included in the
 [OpenVPN installer](https://openvpn.net/index.php/open-source/downloads.html). If multiple TAP adapters
 exist in the system one can be specified using the `-d` parameter and the "Friendly Name" of the adapter
-(the one shown in the Network Adapter List in the Control Pannel). Currently spaces are not allowed when
-specifing a name with `-d`, but Network Adapters can be renamed to not contain spaces in the Windows Control
-Panel.
+(the one shown in the Network Adapter List in the Control Pannel). If the name containes spaces be sure to use quotation marks around it.
 
 # Supernode
 
@@ -133,6 +131,6 @@ script in the repository.
 When running as a service, edge and supernode are not attached to
 a console, messages are logged in the Windows Event Log.
 
-The commandline parameters are stored in
-`HKLM:\SOFTWARE\n2n\edge\Arguments` and
-`HKLM:\SOFTWARE\n2n\supernode\Arguments`.
+The commandline parameters are stored in `HKLM:\SOFTWARE\n2n\edge\Arguments` and `HKLM:\SOFTWARE\n2n\supernode\Arguments`.
+They can be modified using `regedit` or an administrative PowerShell Console. Both entries are *MulitStrings*, so that parameters
+containing spaces can properly supported but if this is not needed the registry entries can be of type *String* too.

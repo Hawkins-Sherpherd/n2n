@@ -215,6 +215,7 @@ static int readConfFile(const char * filename, char * const linebuffer) {
     return 0;
 }
 
+#if 0
 /* Create the argv vector */
 static char ** buildargv(int * effectiveargc, char * const linebuffer) {
     const int  INITIAL_MAXARGC = 16;	/* Number of args + NULL in initial argv */
@@ -272,7 +273,7 @@ static char ** buildargv(int * effectiveargc, char * const linebuffer) {
     *effectiveargc = argc;
     return argv;
 }
-
+#endif
 /* ************************************** */
 
 
@@ -321,7 +322,6 @@ static int edge_init(n2n_edge_t * eee)
 
     return(0);
 }
-
 
 
 /* Called in main() after options are parsed. */
@@ -1882,7 +1882,7 @@ static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) 
     if ( len > 0) {       
         const struct addrinfo aihints = { 0, af, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
         struct addrinfo * ainfo = NULL;
-        int nameerr;
+        int err, ip_error = 0;
         char *supernode_port = NULL;
         
         if (addr[len - 1] != ']') {
@@ -1896,42 +1896,50 @@ static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) 
         if (sn->port == 0)
             sn->port = SUPERNODE_PORT;
 
-        nameerr = getaddrinfo( addr, NULL, &aihints, &ainfo );
-
-        if( 0 == nameerr ) {
-            /* ainfo is the head of a linked list if non-NULL. */
-            if (ainfo) {
-                if (PF_INET == ainfo->ai_family) {
-                    struct sockaddr_in* saddr = (struct sockaddr_in*) ainfo->ai_addr;
-                    memcpy( sn->addr.v4, &(saddr->sin_addr), IPV4_SIZE );
-                    sn->family = AF_INET;
-                } else if (PF_INET6 == ainfo->ai_family) {
-                    struct sockaddr_in6 * saddr = (struct sockaddr_in6*) ainfo->ai_addr;
-                    memcpy( sn->addr.v6, &(saddr->sin6_addr), IPV6_SIZE );
-                    sn->family = AF_INET6;
-                }
+        /* try to resolve as numeric address */
+        if ( addr[0] == '[' ) {
+            /* cut leading and trailing brackets */
+            addr[strnlen(addr, N2N_EDGE_SN_HOST_SIZE) - 1] = '\0';
+            if ((err = inet_pton(AF_INET6, addr + 1, &sn->addr.v6)) != 1) {
+                ip_error = errno;
             } else {
-                traceEvent(TRACE_WARNING, "Failed to resolve supernode IP address for %s", addr);
-            }
-
-            freeaddrinfo(ainfo); /* free everything allocated by getaddrinfo(). */
-            ainfo = NULL;
-        } else {
-            /* try to see if it's an numeric ip */
-            if ( addr[0] == '[' ) {
-                /* cut leading and trailing brackets */
-                addr[strnlen(addr, N2N_EDGE_SN_HOST_SIZE) - 1] = '\0';
-                if (inet_pton(AF_INET6, addr + 1, &sn->addr.v6) != 1) {
-                    traceEvent(TRACE_WARNING, "Failed to parse supernode as IPv6 %s: %s", addr, strerror(errno));
-                }
                 sn->family = AF_INET6;
+            }
+        } else {
+            if ((err = inet_pton(AF_INET, addr, &sn->addr.v4)) != 1) {
+                ip_error = errno;
             } else {
-                if (inet_pton(AF_INET, addr, &sn->addr.v4) != 1) {
-                    traceEvent(TRACE_WARNING, "Failed to parse supernode as IPv4 %s: %s", addr, strerror(errno));
-                }
                 sn->family = AF_INET;
             }
-            // traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %s", addr, gai_strerror(nameerr));
+        }
+
+        /* fallback to resolving as a DNS name */
+        if (err != 0) {
+            err = getaddrinfo( addr, NULL, &aihints, &ainfo );
+            if( 0 == err ) {
+                /* ainfo is the head of a linked list if non-NULL. */
+                if (ainfo) {
+                    if (PF_INET == ainfo->ai_family) {
+                        struct sockaddr_in* saddr = (struct sockaddr_in*) ainfo->ai_addr;
+                        memcpy( sn->addr.v4, &(saddr->sin_addr), IPV4_SIZE );
+                        sn->family = AF_INET;
+                    } else if (PF_INET6 == ainfo->ai_family) {
+                        struct sockaddr_in6 * saddr = (struct sockaddr_in6*) ainfo->ai_addr;
+                        memcpy( sn->addr.v6, &(saddr->sin6_addr), IPV6_SIZE );
+                        sn->family = AF_INET6;
+                    }
+                } else {
+                    traceEvent(TRACE_WARNING, "Failed to resolve supernode IP address for %s", addr);
+                }
+
+                freeaddrinfo(ainfo); /* free everything allocated by getaddrinfo(). */
+                ainfo = NULL;
+            } else {           
+                traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %s", addr, gai_strerror(err));
+
+                if (ip_error != 0)
+                    traceEvent(TRACE_WARNING, "Failed to parse supernode as a numeric address %s: %s", addr, strerror(ip_error));
+            }
         }
 
     } else
@@ -2027,7 +2035,6 @@ static int scan_address6( char * ip6_addr, size_t addr_size,
 
     if ( p )
     {
-        /* colon is present */
         if ( ip6_prefixlen )
         {
             size_t end=0;
@@ -2041,7 +2048,6 @@ static int scan_address6( char * ip6_addr, size_t addr_size,
     }
     else
     {
-        /* colon is not present */
         strncpy( ip6_addr, s, addr_size );
     }
 
@@ -2083,10 +2089,6 @@ int main(int argc, char* argv[])
     char    device_mac[N2N_MACNAMSIZ]="";
     char *  encrypt_key=NULL;
 
-    int     i, effectiveargc=0;
-    char ** effectiveargv=NULL;
-    char  * linebuffer = NULL;
-
     n2n_edge_t eee; /* single instance for this program */
 
 #ifdef N2N_HAS_CAPABILITIES
@@ -2122,12 +2124,12 @@ int main(int argc, char* argv[])
     if( getenv( "N2N_KEY" ))
         encrypt_key = strdup( getenv( "N2N_KEY" ));
 
+#ifndef _WIN32
     /* stdout is connected to journald, so don't print data/time */
     if ( getenv( "JOURNAL_STREAM" ) )
         useSystemd = true;
-
-
-#ifdef _WIN32
+#else
+    /* use no adapter name as a default */
     tuntap_dev_name[0] = '\0';
 #endif
     memset(&tuntap_config, 0, sizeof(tuntap_config));
@@ -2135,18 +2137,12 @@ int main(int argc, char* argv[])
     memset(&(eee.supernode), 0, sizeof(eee.supernode));
     eee.supernode.family = AF_INET;
 
-    linebuffer = (char *)malloc(MAX_CMDLINE_BUFFER_LENGTH);
-    if (!linebuffer) {
-        traceEvent( TRACE_ERROR, "Unable to allocate memory");
-        exit(1);
-    }
-    snprintf(linebuffer, MAX_CMDLINE_BUFFER_LENGTH, "%s",argv[0]);
-
-#ifdef _WIN32
-    for(i=0; i < (int)strlen(linebuffer); i++)
-        if(linebuffer[i] == '\\') linebuffer[i] = '/';
-#endif
-
+    /* rebuilding argv has a serious bug, it does not recognize arguments with spaces,
+     * therefore elimination use of key files in paths with spaces in them.
+     * Also on Windows, when specifing adapters with -d, the can were not allowed
+     * to contain spaces. Removing this code fixes all that (albeit removing support for 
+     * the undocumented @config file feature. */
+#if 0
     for(i=1;i<argc;++i) {
         if(argv[i][0] == '@') {
             if (readConfFile(&argv[i][1], linebuffer)<0) exit(1); /* <<<<----- check */
@@ -2169,12 +2165,12 @@ int main(int argc, char* argv[])
         free(linebuffer);
         linebuffer = NULL;
     }
-
     /* {int k;for(k=0;k<effectiveargc;++k)  printf("%s\n",effectiveargv[k]);} */
+#endif
 
     optarg = NULL;
-    while((opt = getopt_long(effectiveargc,
-        effectiveargv,
+    while((opt = getopt_long(argc,
+        argv,
         "46K:k:a:A:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL
     )) != EOF) {
         switch (opt) {
@@ -2372,20 +2368,11 @@ int main(int argc, char* argv[])
 #endif /* #ifdef N2N_HAVE_DAEMON */
     traceEvent( TRACE_NORMAL, "Starting n2n edge %s %s", n2n_sw_version, n2n_sw_buildDate );
 
-    for (i=0; i< N2N_EDGE_NUM_SUPERNODES; ++i ) {
+    for (int i = 0; i< N2N_EDGE_NUM_SUPERNODES; ++i ) {
         traceEvent( TRACE_NORMAL, "supernode %u => %s\n", i, (eee.sn_ip_array[i]) );
     }
 
     supernode2addr( &(eee.supernode), eee.sn_af, eee.sn_ip_array[eee.sn_idx] );
-
-
-    for ( i=0; i<effectiveargc; ++i )
-    {
-        free( effectiveargv[i] );
-    }
-    free( effectiveargv );
-    effectiveargv = 0;
-    effectiveargc = 0;
 
     if(!(
 #if N2N_CAN_NAME_IFACE && !_WIN32
