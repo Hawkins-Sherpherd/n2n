@@ -94,6 +94,7 @@ struct n2n_edge
     size_t              sn_idx;                 /**< Currently active supernode. */
     size_t              sn_num;                 /**< Number of supernode addresses defined. */
     n2n_sn_name_t       sn_ip_array[N2N_EDGE_NUM_SUPERNODES];
+    int                 sn_af;
     int                 sn_wait;                /**< Whether we are waiting for a supernode response. */
 
     n2n_community_t     community_name;         /**< The community. 16 full octets. */
@@ -136,7 +137,7 @@ static const char * supernode_ip( const n2n_edge_t * eee )
 }
 
 
-static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addr);
+static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addr);
 
 static void send_packet2net(n2n_edge_t * eee,
                 uint8_t *decrypted_msg, size_t len);
@@ -310,6 +311,7 @@ static int edge_init(n2n_edge_t * eee)
     eee->last_p2p = 0;
     eee->last_sup = 0;
     eee->sup_attempts = N2N_EDGE_SUP_ATTEMPTS;
+    eee->sn_af = AF_UNSPEC;
 
     if(lzo_init() != LZO_E_OK)
     {
@@ -498,12 +500,13 @@ static void help() {
 #endif
         "\n"
         "-l <supernode host:port> "
+        "[-4|-6]"
         "[-p <local port>] "
 #ifndef _WIN32
         "[-M <mtu>] "
 #endif
         "[-r] [-E] [-v] [-t <mgmt port>] [-b] [-h]\n\n");
-#ifdef __linux__
+#ifdef N2N_CAN_NAME_IFACE
     printf("-d <tun device>          | tun device name\n");
 #endif
     printf("-a <mode:address>        | Set interface IPv4 address. For DHCP use '-r -a dhcp:0.0.0.0'\n");
@@ -513,6 +516,7 @@ static void help() {
     printf("-K <key file>            | Specify a key schedule file to load. Not with -k.\n");
     printf("-s <netmask>             | Edge interface netmask in dotted decimal notation (255.255.255.0).\n");
     printf("-l <supernode host:port> | Supernode IP:port\n");
+    printf("[-4|-6]                  | Resolve supernode DNS name as IPv4 or IPv6 (default is unspecified)\n");
     printf("-b                       | Periodically resolve supernode IP\n");
     printf("                         : (when supernodes are running on dynamic IPs)\n");
     printf("-p <local port>          | Fixed local UDP port.\n");
@@ -1054,7 +1058,7 @@ static void update_supernode_reg( n2n_edge_t * eee, time_t nowTime )
 
     if(eee->re_resolve_supernode_ip || (eee->sn_num > 1) )
     {
-        supernode2addr(&(eee->supernode), eee->sn_ip_array[eee->sn_idx] );
+        supernode2addr(&(eee->supernode), eee->sn_af, eee->sn_ip_array[eee->sn_idx] );
     }
 
     traceEvent(TRACE_DEBUG, "Registering with supernode (%s) (attempts left %u)",
@@ -1870,12 +1874,13 @@ static void startTunReadThread(n2n_edge_t *eee)
  *  REVISIT: This is a really bad idea. The edge will block completely while the
  *           hostname resolution is performed. This could take 15 seconds.
  */
-static void supernode2addr(n2n_sock_t * sn, const n2n_sn_name_t addrIn) {
+static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) {
     n2n_sn_name_t addr;
     memcpy( addr, addrIn, N2N_EDGE_SN_HOST_SIZE );
     size_t len = strnlen(addr, N2N_EDGE_SN_HOST_SIZE);
+
     if ( len > 0) {       
-        const struct addrinfo aihints = { 0, AF_UNSPEC, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
+        const struct addrinfo aihints = { 0, af, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
         struct addrinfo * ainfo = NULL;
         int nameerr;
         char *supernode_port = NULL;
@@ -2170,9 +2175,15 @@ int main(int argc, char* argv[])
     optarg = NULL;
     while((opt = getopt_long(effectiveargc,
         effectiveargv,
-        "K:k:a:A:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL
+        "46K:k:a:A:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL
     )) != EOF) {
         switch (opt) {
+        case '4':
+            eee.sn_af = AF_INET;
+        break;
+        case '6':
+            eee.sn_af = AF_INET6;
+        break;
         case'K':
         {
             if ( encrypt_key ) {
@@ -2365,7 +2376,7 @@ int main(int argc, char* argv[])
         traceEvent( TRACE_NORMAL, "supernode %u => %s\n", i, (eee.sn_ip_array[i]) );
     }
 
-    supernode2addr( &(eee.supernode), eee.sn_ip_array[eee.sn_idx] );
+    supernode2addr( &(eee.supernode), eee.sn_af, eee.sn_ip_array[eee.sn_idx] );
 
 
     for ( i=0; i<effectiveargc; ++i )
