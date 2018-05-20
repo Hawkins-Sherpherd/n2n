@@ -13,14 +13,19 @@ FacilityNames=(System=0x0:FACILITY_SYSTEM
     Io=0x4:FACILITY_IO_ERROR_CODE
 )
 
-LanguageNames=(English=0x409:MSG00000)
+LanguageNames=(Neutral=0x0000:MSG00000)
 
 ; // The following are message definitions.
+
+; // Just provide the message contents no extras,
+; // Message contains
+; //   %1: Service name, i.e. edge or supernode
+; //   %2: Message
 
 MessageId=0x0
 Severity=Informational
 Facility=Runtime
-SymbolicName=SVC_INFORMATIONAL
-Language=English
-%2.
+SymbolicName=SVC_MESSAGE
+Language=Neutral
+%2
 .
