@@ -471,6 +471,10 @@ static void edge_deinit(n2n_edge_t * eee)
 
     (eee->transop[N2N_TRANSOP_TF_IDX].deinit)(&eee->transop[N2N_TRANSOP_TF_IDX]);
     (eee->transop[N2N_TRANSOP_NULL_IDX].deinit)(&eee->transop[N2N_TRANSOP_NULL_IDX]);
+
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
 static void readFromIPSocket( n2n_edge_t * eee );
@@ -481,16 +485,18 @@ static void help() {
     print_n2n_version();
 
     printf("edge "
-#if defined(N2N_CAN_NAME_IFACE)
+#if N2N_CAN_NAME_IFACE && !_WIN32
         "-d <tun device> "
-#endif /* #if defined(N2N_CAN_NAME_IFACE) */
+#elif N2N_CAN_NAME_IFACE && _WIN32
+        "[-d <tun device>] "
+#endif /* #if N2N_CAN_NAME_IFACE */
         "-a [static:|dhcp:]<tun IP address> "
         "-c <community> "
         "[-k <encrypt key> | -K <key file>] "
         "[-s <netmask>] "
 #if defined(N2N_HAVE_SETUID)
         "[-u <uid> -g <gid>]"
-#endif /* #ifndef N2N_HAVE_SETUID */
+#endif /* #ifdef N2N_HAVE_SETUID */
 
 #if defined(N2N_HAVE_DAEMON)
         "[-f]"

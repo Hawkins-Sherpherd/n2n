@@ -99,6 +99,10 @@ static void deinit_sn( n2n_sn_t * sss )
     sss->mgmt_sock = -1;
 
     purge_peer_list( &(sss->edges), 0xffffffff );
+
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
 
