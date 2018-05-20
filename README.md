@@ -19,9 +19,12 @@ and run as a daemon.
 
 Note that `-u`, `-g` and `-f` options are not available for Windows.
 
-When running edge on Windows a compatile TAP network interface is required, the driver is included in the OpenVPN installer [1]. If multiple TAP adapters exist in the system one can be specified using the `-d` parameter and the "Friendly Name" of the adapter (the one shown in the Network Adapter List in the Control Pannel). Currently not spaces are allowd when using `-d`, but Network Adapters can be renamed to not contain spaces.
-
-[1]: [https://openvpn.net/index.php/open-source/downloads.html]
+When running edge on Windows a compatile TAP network interface is required, the driver is included in the
+[OpenVPN installer](https://openvpn.net/index.php/open-source/downloads.html). If multiple TAP adapters
+exist in the system one can be specified using the `-d` parameter and the "Friendly Name" of the adapter
+(the one shown in the Network Adapter List in the Control Pannel). Currently spaces are not allowed when
+specifing a name with `-d`, but Network Adapters can be renamed to not contain spaces in the Windows Control
+Panel.
 
 # Supernode
 
@@ -124,7 +127,7 @@ Systemd requires a Linux Kernel 4.3 or greater for this feature.
 
 ## SCM Service (WINDOWS)
 
-edge and supernode can be installed as a Windows SCM service, consult the `win32/install.ps1`
+edge and supernode can be installed as a Windows SCM service, consult the [`win32/install.ps1`](win32/install.ps1)
 script in the repository.
 
 When running as a service, edge and supernode are not attached to
