@@ -137,7 +137,7 @@ static const char * supernode_ip( const n2n_edge_t * eee )
 }
 
 
-static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addr);
+static int supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addr);
 
 static void send_packet2net(n2n_edge_t * eee,
                 uint8_t *decrypted_msg, size_t len);
@@ -145,6 +145,7 @@ static void send_packet2net(n2n_edge_t * eee,
 
 /* ************************************** */
 
+#if 0
 /* parse the configuration file */
 static int readConfFile(const char * filename, char * const linebuffer) {
     FILE* fd;
@@ -215,7 +216,7 @@ static int readConfFile(const char * filename, char * const linebuffer) {
     return 0;
 }
 
-#if 0
+
 /* Create the argv vector */
 static char ** buildargv(int * effectiveargc, char * const linebuffer) {
     const int  INITIAL_MAXARGC = 16;	/* Number of args + NULL in initial argv */
@@ -1880,15 +1881,14 @@ static void startTunReadThread(n2n_edge_t *eee)
  *  REVISIT: This is a really bad idea. The edge will block completely while the
  *           hostname resolution is performed. This could take 15 seconds.
  */
-static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) {
+static int supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) {
     n2n_sn_name_t addr;
     memcpy( addr, addrIn, N2N_EDGE_SN_HOST_SIZE );
     size_t len = strnlen(addr, N2N_EDGE_SN_HOST_SIZE);
+    int err;
 
-    if ( len > 0) {       
-        const struct addrinfo aihints = { 0, af, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
-        struct addrinfo * ainfo = NULL;
-        int err, ip_error = 0;
+    if ( len > 0) {
+        int ip_error = 0;
         char *supernode_port = NULL;
         
         if (addr[len - 1] != ']') {
@@ -1920,7 +1920,10 @@ static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) 
         }
 
         /* fallback to resolving as a DNS name */
-        if (err != 0) {
+        if (err != 1) {
+            const struct addrinfo aihints = { 0, af, SOCK_DGRAM, 0, 0, NULL, NULL, NULL };
+            struct addrinfo * ainfo = NULL;
+
             err = getaddrinfo( addr, NULL, &aihints, &ainfo );
             if( 0 == err ) {
                 /* ainfo is the head of a linked list if non-NULL. */
@@ -1940,16 +1943,28 @@ static void supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) 
 
                 freeaddrinfo(ainfo); /* free everything allocated by getaddrinfo(). */
                 ainfo = NULL;
-            } else {           
+
+                err = 0;
+            } else {
+#if _WIN32
+                traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %ls", addr, gai_strerror(err));
+#else
                 traceEvent(TRACE_WARNING, "Failed to resolve supernode host %s: %s", addr, gai_strerror(err));
-
-                if (ip_error != 0)
+#endif
+                err = -1;
+                if (ip_error != 0) {
                     traceEvent(TRACE_WARNING, "Failed to parse supernode as a numeric address %s: %s", addr, strerror(ip_error));
+                }
             }
+        } else {
+            err = 0;
         }
-
-    } else
+    } else {
         traceEvent(TRACE_WARNING, "Wrong supernode parameter (-l <host:port>)");
+        err = -1;
+    }
+
+    return err;
 }
 
 /* ***************************************************** */
@@ -2378,7 +2393,9 @@ int main(int argc, char* argv[])
         traceEvent( TRACE_NORMAL, "supernode %u => %s\n", i, (eee.sn_ip_array[i]) );
     }
 
-    supernode2addr( &(eee.supernode), eee.sn_af, eee.sn_ip_array[eee.sn_idx] );
+    if (supernode2addr( &(eee.supernode), eee.sn_af, eee.sn_ip_array[eee.sn_idx] ) != 0) {
+        exit(1);
+    }
 
     if(!(
 #if N2N_CAN_NAME_IFACE && !_WIN32
