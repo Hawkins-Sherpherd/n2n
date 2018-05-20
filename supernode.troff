@@ -1,8 +1,8 @@
-.TH supernode 1  "Jan 3, 2009" "revision 3679" "USER COMMANDS"
+.TH supernode 1  "May 19 2018" "n2n-2.1" "USER COMMANDS"
 .SH NAME
 supernode \- n2n supernode daemon
 .SH SYNOPSIS
-.B supernode \-l <port> [\-v]
+.B supernode [\-l <port>] [\-v] [\-4] [\-6]
 .SH DESCRIPTION
 N2N is a peer-to-peer VPN system. Supernode is a node introduction registry,
 broadcast conduit and packet relay node for the n2n system. On startup supernode
@@ -19,7 +19,14 @@ All logging goes to stdout.
 .SH OPTIONS
 .TP
 \-l <port>
-listen on the given UDP port
+listen on the given UDP port. Defaults to 7654
+.TP
+\-4
+bind to the any interface IPv4 address. This is the default.
+.TP
+\-6
+bind to the any interface IPv6 address. This disables IPv4 but it can be combined with
+the \-4 switch to allow IPv4 and IPv6 traffic.
 .TP
 \-v
 use verbose logging
@@ -31,13 +38,16 @@ disable daemon mode (UNIX) and run in foreground.
 .B supernode -l 7654 -v
 Start supernode listening on UDP port 7654 with verbose output.
 .PP
+.SH REMARKS
+Additionally supernode opens UDP port 5645 on the IPv4 loopback interface (127.0.0.1).
+On this management socket statistical information can be queried, i.e. using socat.
 .SH RESTART
-When suprenode restarts it loses all registration information from associated
+When supernode restarts it loses all registration information from associated
 edge nodes. It can take up to five minutes for the edge nodes to re-register and
 normal traffic flow to resume.
 .SH EXIT STATUS
 supernode is a daemon and any exit is an error
 .SH AUTHOR
-Luca Deri ( deri (at) ntop.org ), Richard Andrews ( andrews (at) ntop.org ), Don Bindner
+Luca Deri ( deri (at) ntop.org ), Richard Andrews ( andrews (at) ntop.org ), Don Bindner, Max Resch
 .SH SEE ALSO
-ifconfig(8) edge(8)
+edge(8) n2n(7)
