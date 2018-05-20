@@ -114,18 +114,18 @@ if(DEFINED UNIX)
 add_dependencies(n2n doc)
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/doc)
 add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/doc/edge.8.gz
-                   COMMAND gzip -c ${PROJECT_SOURCE_DIR}/edge.8 > ${PROJECT_BINARY_DIR}/doc/edge.8.gz
-                   DEPENDS ${PROJECT_SOURCE_DIR}/edge.8
+                   COMMAND gzip -c ${PROJECT_SOURCE_DIR}/edge.troff > ${PROJECT_BINARY_DIR}/doc/edge.8.gz
+                   DEPENDS ${PROJECT_SOURCE_DIR}/edge.troff
                   )
 
 add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/doc/supernode.1.gz
-                   COMMAND gzip -c ${PROJECT_SOURCE_DIR}/supernode.1 > ${PROJECT_BINARY_DIR}/doc/supernode.1.gz
-                   DEPENDS ${PROJECT_SOURCE_DIR}/supernode.1
+                   COMMAND gzip -c ${PROJECT_SOURCE_DIR}/supernode.troff > ${PROJECT_BINARY_DIR}/doc/supernode.1.gz
+                   DEPENDS ${PROJECT_SOURCE_DIR}/supernode.troff
                   )
 
 add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/doc/n2n_v2.7.gz
-                   COMMAND gzip -c ${PROJECT_SOURCE_DIR}/n2n_v2.7 > ${PROJECT_BINARY_DIR}/doc/n2n_v2.7.gz
-                   DEPENDS ${PROJECT_SOURCE_DIR}/n2n_v2.7
+                   COMMAND gzip -c ${PROJECT_SOURCE_DIR}/n2n_v2.troff > ${PROJECT_BINARY_DIR}/doc/n2n_v2.7.gz
+                   DEPENDS ${PROJECT_SOURCE_DIR}/n2n_v2.troff
                   )
 
 add_custom_target(doc DEPENDS ${PROJECT_BINARY_DIR}/doc/edge.8.gz
