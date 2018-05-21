@@ -1,4 +1,4 @@
-.TH supernode 1  "May 19 2018" "n2n-2.1" "USER COMMANDS"
+.TH supernode 1  "May 19 2018" "n2n-2.2" "USER COMMANDS"
 .SH NAME
 supernode \- n2n supernode daemon
 .SH SYNOPSIS

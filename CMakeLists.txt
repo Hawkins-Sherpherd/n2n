@@ -1,8 +1,8 @@
 project(n2n C)
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.7)
 
 # N2n information
-set(N2N_VERSION 2.1.0)
+set(N2N_VERSION 2.2.0)
 set(N2N_OSNAME ${CMAKE_SYSTEM_NAME})
 
 # N2n specific params
