@@ -78,7 +78,7 @@ $arguments_edge = @(
 # note that the tap0901 name might change, this is for the TAP device driver version 9
 # version 8 would be tap0801.
 
-Install-ServiceInstance "edge.exe" "edge" $arguments_edge -depends "tap0901"
+Install-ServiceInstance "edge.exe" "edge" $arguments_edge -depends $("tap0901", "netman")
 Install-ServiceInstance "supernode.exe" "supernode" @("-4", "-6", "-l", "4385")
 
 # Edge can run multiple instances (as different services), simply by giving another instance name and a different set
