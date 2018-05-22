@@ -82,6 +82,7 @@ typedef struct tuntap_dev {
 	NET_IFINDEX  ifIdx;
 	NET_LUID luid;
 	OVERLAPPED overlap_read, overlap_write;
+	short        dyn_ip4;
 	uint8_t      mac_addr[6];
 	uint32_t     ip_addr, device_mask;
 	struct in6_addr ip6_addr;
@@ -104,6 +105,8 @@ extern wchar_t scm_name[_SCM_NAME_LENGTH];
 void initWin32();
 
 int scm_startup(wchar_t* name);
+
+int tuntap_restart( tuntap_dev* device );
 
 #endif /* _WIN32 */
 #endif

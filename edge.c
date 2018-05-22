@@ -1338,7 +1338,7 @@ static void readFromTAPSocket( n2n_edge_t * eee )
     uint8_t             eth_pkt[N2N_PKT_BUF_SIZE];
     macstr_t            mac_buf;
     ssize_t             len;
-
+retry:
     len = tuntap_read( &(eee->device), eth_pkt, N2N_PKT_BUF_SIZE );
 
     if( (len <= 0) || (len > N2N_PKT_BUF_SIZE) )
@@ -1348,6 +1348,15 @@ static void readFromTAPSocket( n2n_edge_t * eee )
         W32_ERROR(err, error);
         traceEvent(TRACE_WARNING, "read()=%d [%d/%ls]", (signed int)len, err, error);
         W32_ERROR_FREE(error);
+        if (ERROR_OPERATION_ABORTED == err) {
+retry2:
+            traceEvent(TRACE_NORMAL, "Restart TAP device");
+            if (tuntap_restart( &eee->device ) < 0) {
+                Sleep(2000);
+                goto retry2;
+            }
+            goto retry;
+        }
 #else
         traceEvent(TRACE_WARNING, "read()=%d [%d/%s]", (signed int)len, errno, strerror(errno));
 #endif

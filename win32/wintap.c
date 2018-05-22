@@ -277,6 +277,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
     device->ip6_prefixlen = config->ip6_prefixlen;
     device->mtu = config->mtu;
+    device->dyn_ip4 = config->dyn_ip4;
 
     traceEvent(TRACE_NORMAL, "Interface %ls has MAC %s", adaptername, macaddr_str(mac_addr_buf, device->mac_addr));
 #if 0
@@ -296,7 +297,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
 
     /* printf("Setting %ls device address...\n", device->device_name); */
 
-    if (config->dyn_ip4) {
+    if (device->dyn_ip4) {
         rc = set_dhcp(device);
     } else {        
         rc = set_static_ip_address(device);
@@ -402,6 +403,61 @@ void tuntap_close(struct tuntap_dev *tuntap) {
         tuntap->device_name[0] = '\0';
     }
     CloseHandle(tuntap->device_handle);
+}
+
+int tuntap_restart( tuntap_dev* device ) {
+    WCHAR tapname[MAX_PATH];
+    ULONG status = TRUE;
+    DWORD rc;
+    long len;
+
+    CloseHandle(device->device_handle);
+    
+    ResetEvent(device->overlap_write.hEvent);
+    ResetEvent(device->overlap_read.hEvent);
+
+    swprintf(tapname, sizeof(tapname), USERMODEDEVICEDIR "%s" TAP_WIN_SUFFIX, device->device_name);
+    device->device_handle = CreateFile(
+        tapname, GENERIC_WRITE | GENERIC_READ,
+        0, /* Don't let other processes share or open the resource until the handle's been closed */
+        0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0
+    );
+    if(device->device_handle == INVALID_HANDLE_VALUE) {
+        W32_ERROR(GetLastError(), error)
+        traceEvent(TRACE_ERROR, "Unable to reopen TAP adapter %ls: %ls", device->device_name, error);
+        W32_ERROR_FREE(error)
+        return -1;
+    }
+
+    if (device->dyn_ip4) {
+        rc = set_dhcp(device);
+    } else {        
+        rc = set_static_ip_address(device);
+    }
+
+    if (rc == 0) {
+        tuntap_get_address(device);
+    } else {
+        W32_ERROR(rc, error)
+        traceEvent(TRACE_WARNING, "Unable to set device %ls IP address: %u", device->device_name, error);
+        W32_ERROR_FREE(error)
+    }
+
+    if(device->mtu != DEFAULT_MTU)
+        traceEvent(TRACE_WARNING, "MTU set is not supported on Windows");
+
+    if (!DeviceIoControl(
+        device->device_handle, TAP_WIN_IOCTL_SET_MEDIA_STATUS,
+        &status, sizeof (status),
+        &status, sizeof (status), &len, NULL
+    )) {
+        W32_ERROR(GetLastError(), error);
+        traceEvent(TRACE_ERROR, "Unable to enable TAP adapter %ls: %ls", device->device_name, error);
+        W32_ERROR_FREE(error);
+        return -1;
+    }
+
+    return 0;
 }
 
 /* Fill out the ip_addr value from the interface. Called to pick up dynamic
