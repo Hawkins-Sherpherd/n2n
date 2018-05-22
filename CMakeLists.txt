@@ -61,9 +61,13 @@ set(CMAKE_RC_FLAGS /nologo)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477 /wd4267")
 
 add_subdirectory(win32)
-set(OBJECTS ${OBJECTS} $<TARGET_OBJECTS:n2n_win32>)
-set(EDGE_RESOURCE ${CMAKE_CURRENT_SOURCE_DIR}/win32/edge.rc)
-set(SN_RESOURCE ${CMAKE_CURRENT_SOURCE_DIR}/win32/sn.rc)
+set(OBJECTS
+        ${OBJECTS}
+        $<TARGET_OBJECTS:n2n_win32>
+        ${CMAKE_CURRENT_SOURCE_DIR}/win32/application.manifest
+)
+set(EDGE_RESOURCE ${CMAKE_CURRENT_SOURCE_DIR}/win32/edge.rc )
+set(SN_RESOURCE ${CMAKE_CURRENT_SOURCE_DIR}/win32/sn.rc )
 
 else(DEFINED WIN32)
 
