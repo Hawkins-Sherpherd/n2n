@@ -1,6 +1,6 @@
 /* (c) 2009 Richard Andrews <andrews@ntop.org> */
 
-#if !defined(N2N_TRANSFORMS_H_)
+#ifndef N2N_TRANSFORMS_H_
 #define N2N_TRANSFORMS_H_
 
 #include "n2n_keyfile.h"
@@ -74,5 +74,5 @@ int  transop_twofish_init( n2n_trans_op_t * ttt );
 int  transop_aes_init( n2n_trans_op_t * ttt );
 void transop_null_init( n2n_trans_op_t * ttt );
 
-#endif /* #if !defined(N2N_TRANSFORMS_H_) */
+#endif /* N2N_TRANSFORMS_H_ */
 

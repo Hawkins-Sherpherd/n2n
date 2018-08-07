@@ -5,15 +5,28 @@ cmake_minimum_required(VERSION 3.7)
 set(N2N_VERSION 2.2.0)
 set(N2N_OSNAME ${CMAKE_SYSTEM_NAME})
 
+add_definitions(-DN2N_VERSION=\"${N2N_VERSION}\" -DN2N_OSNAME=\"${N2N_OSNAME}\")
+
 # N2n specific params
 if(NOT DEFINED N2N_OPTION_AES)
 set(N2N_OPTION_AES OFF)
 endif(NOT DEFINED N2N_OPTION_AES)
 
-add_definitions(-DN2N_VERSION=\"${N2N_VERSION}\" -DN2N_OSNAME=\"${N2N_OSNAME}\")
-
 if(N2N_OPTION_AES)
 add_definitions(-DN2N_HAVE_AES)
+if(USE_GCRYPT)
+        add_definitions(-DUSE_GCRYPT=1)
+        set(CRYPTO_LIB gcrypt)
+elseif(USE_NETTLE)
+        add_definitions(-DUSE_NETTLE=1)
+        set(CRYPTO_LIB nettle)
+elseif(USE_OPENSSL)
+        add_definitions(-DUSE_OPENSSL=1)
+        set(CRYPTO_LIB crypto)
+elseif(DEFINED WIN32)
+        add_definitions(-DUSE_BCRYPT=1)
+        set(CRYPTO_LIB bcrypt)
+endif()
 endif(N2N_OPTION_AES)
 
 # Build information
@@ -40,17 +53,7 @@ endif(NOT DEFINED CMAKE_BUILD_TYPE)
 
 add_library(n2n OBJECT
         n2n.c
-        n2n_keyfile.c
         wire.c
-        minilzo.c
-        twofish.c
-        transform_null.c
-        transform_tf.c
-        transform_aes.c
-        tuntap_freebsd.c
-        tuntap_netbsd.c
-        tuntap_linux.c
-        tuntap_osx.c
         version.c
 )
 set(OBJECTS $<TARGET_OBJECTS:n2n>)
@@ -72,19 +75,29 @@ set(SN_RESOURCE )
 
 endif(DEFINED WIN32)
 
-if(N2N_OPTION_AES)
-target_link_libraries(n2n crypto)
-endif(N2N_OPTION_AES)
-
-# For Solaris (or OpenSolaris?)
-#target_link_libraries(n2n socket nsl)
-
-add_executable(edge edge.c ${OBJECTS} ${EDGE_RESOURCE})
+add_executable(edge
+        edge.c
+        twofish.c
+        transform_null.c
+        transform_tf.c
+        transform_aes.c
+        n2n_keyfile.c
+        minilzo.c
+        tuntap_freebsd.c
+        tuntap_netbsd.c
+        tuntap_linux.c
+        tuntap_osx.c
+        ${OBJECTS} ${EDGE_RESOURCE}
+)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-target_link_libraries(edge cap)
+        target_link_libraries(edge cap)
 endif()
 
-add_executable(supernode sn.c ${OBJECTS} ${SN_RESOURCE})
+add_executable(supernode
+        sn.c
+        ${OBJECTS} ${SN_RESOURCE}
+)
+
 if(DEFINED WIN32)
 set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")
 add_custom_command(
@@ -94,6 +107,14 @@ add_custom_command(
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/win32/install.ps1"
 )
 endif(DEFINED WIN32)
+
+# For Solaris (or OpenSolaris?)
+#target_link_libraries(edge socket nsl)
+#target_link_libraries(supernode socket nsl)
+
+if(N2N_OPTION_AES)
+target_link_libraries(edge ${CRYPTO_LIB})
+endif(N2N_OPTION_AES)
 
 if(NOT DEFINED WIN32)
 #add_executable(test test.c)

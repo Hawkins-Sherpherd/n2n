@@ -5,14 +5,19 @@
 
 #include "n2n.h"
 #include "n2n_transforms.h"
+#ifdef N2N_HAVE_AES
 
-#if defined(N2N_HAVE_AES)
-
+#if USE_OPENSSL
 #include <openssl/evp.h>
 #include <openssl/rand.h>
-#ifndef _MSC_VER
-/* Not included in Visual Studio 2008 */
-#include <strings.h> /* index() */
+#elif USE_NETTLE
+#include <nettle/aes.h>
+#include <nettle/cbc.h>
+#include <nettle/yarrow.h>
+#elif USE_GCRYPT
+#include <gcrypt.h>
+#elif USE_BCRYPT
+#include <bcrypt.h>
 #endif
 
 #define N2N_AES_NUM_SA                  32 /* space for SAa */
@@ -28,10 +33,23 @@ struct sa_aes
     n2n_sa_t            sa_id;          /* security association index */
     n2n_aes_ivec_t      enc_ivec;       /* tx CBC state */
     n2n_aes_ivec_t      dec_ivec;       /* tx CBC state */
-    EVP_CIPHER_CTX      *ctx;           /* cipher context */
-    const EVP_CIPHER    *cipher;        /* libcrypt cipher */
     int                 block_size;     /* cipher block size */
     uint8_t             key[N2N_MAX_KEYSIZE]; /* keydata */
+#if USE_OPENSSL
+    EVP_CIPHER_CTX      *ctx;           /* cipher context */
+    const EVP_CIPHER    *cipher;        /* libcrypt cipher */
+#elif USE_NETTLE
+    struct CBC_CTX(struct aes_ctx, AES_BLOCK_SIZE) enc_ctx;
+    struct CBC_CTX(struct aes_ctx, AES_BLOCK_SIZE) dec_ctx;
+    uint32_t            key_size;
+    struct yarrow256_ctx random;
+#elif USE_GCRYPT
+    gcry_cipher_hd_t    cipher;
+#elif USE_BCRYPT
+    BCRYPT_ALG_HANDLE   hAlgorithm;
+    BCRYPT_KEY_HANDLE   hKey;
+    BCRYPT_ALG_HANDLE   hRandom;
+#endif
 };
 
 typedef struct sa_aes sa_aes_t;
@@ -56,17 +74,26 @@ typedef struct transop_aes transop_aes_t;
 static int transop_deinit_aes( n2n_trans_op_t * arg )
 {
     transop_aes_t * priv = (transop_aes_t *)arg->priv;
-    size_t i;
 
     if ( priv )
     {
         /* Memory was previously allocated */
-        for (i=0; i<N2N_AES_NUM_SA; ++i )
+        for (size_t i = 0; i < N2N_AES_NUM_SA; ++i )
         {
             sa_aes_t * sa = &(priv->sa[i]);
 
             sa->sa_id=0;
+#if USE_OPENSSL
             EVP_CIPHER_CTX_free( sa->ctx );
+#elif USE_GCRYPT
+            if (sa->cipher)
+                gcry_cipher_close( sa->cipher );
+#elif USE_BCRYPT
+            if (sa->hKey)
+                BCryptDestroyKey( sa->hKey );
+            BCryptCloseAlgorithmProvider( sa->hAlgorithm, 0 );
+            BCryptCloseAlgorithmProvider( sa->hRandom, 0 );
+#endif
         }
     
         priv->num_sa=0;
@@ -93,6 +120,7 @@ static size_t aes_choose_tx_sa( transop_aes_t * priv )
 #define AES192_KEY_BYTES (192/8)
 #define AES128_KEY_BYTES (128/8)
 
+#if USE_OPENSSL
 /* Return the best acceptable AES key size (in bytes) given an input keysize. 
  *
  * The value returned will be one of AES128_KEY_BYTES, AES192_KEY_BYTES or
@@ -113,6 +141,37 @@ static const EVP_CIPHER* aes_best_keysize(size_t numBytes)
         return EVP_aes_128_cbc();
     }
 }
+#elif USE_GCRYPT
+static int aes_best_keysize(size_t numBytes) {
+    if (numBytes >= AES256_KEY_BYTES )
+    {
+        return GCRY_CIPHER_AES256;
+    }
+    else if (numBytes >= AES192_KEY_BYTES)
+    {
+        return GCRY_CIPHER_AES192;
+    }
+    else
+    {
+        return GCRY_CIPHER_AES128;
+    }
+}
+#elif USE_BCRYPT || USE_NETTLE
+static uint32_t aes_best_keysize(size_t numBytes) {
+    if (numBytes >= AES256_KEY_BYTES )
+    {
+        return 256;
+    }
+    else if (numBytes >= AES192_KEY_BYTES)
+    {
+        return 192;
+    }
+    else
+    {
+        return 128;
+    }
+}
+#endif
 
 /** The aes packet format consists of:
  *
@@ -131,18 +190,19 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
 {
     ssize_t len2=-1;
     transop_aes_t * priv = (transop_aes_t *)arg->priv;
-    uint8_t assembly[N2N_PKT_BUF_SIZE];
-    uint32_t * pnonce;
 
     if ( (in_len + TRANSOP_AES_NONCE_SIZE) <= N2N_PKT_BUF_SIZE )
     {
         if ( (in_len + TRANSOP_AES_NONCE_SIZE + TRANSOP_AES_SA_SIZE + TRANSOP_AES_VER_SIZE) <= out_len )
         {
-            int len=-1;
+            int len;
             int len3=-1;
             size_t idx=0;
             sa_aes_t * sa;
             size_t tx_sa_num = 0;
+
+            uint8_t assembly[N2N_PKT_BUF_SIZE];
+            uint32_t * pnonce;
 
             /* The transmit sa is periodically updated */
             tx_sa_num = aes_choose_tx_sa( priv );
@@ -163,23 +223,45 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
             /* The assembly buffer is a source for encrypting data. The nonce is
              * written in first followed by the packet payload. The whole
              * contents of assembly are encrypted. */
-            pnonce = (uint32_t *)assembly;
-            RAND_bytes((void*)pnonce, sizeof(uint32_t));
+            pnonce = (uint32_t*) assembly;
+#if USE_OPENSSL
+            RAND_bytes((void*) pnonce, sizeof(uint32_t));
+#elif USE_NETTLE
+            yarrow256_random( &sa->random, sizeof(uint32_t), (uint8_t*) pnonce );
+#elif USE_GCRYPT
+            gcry_create_nonce((unsigned char*) pnonce, sizeof(uint32_t));
+#elif USE_BCRYPT
+            BCryptGenRandom ( sa->hRandom, (unsigned char*) pnonce, sizeof(uint32_t), 0 );
+#endif
             memcpy( assembly + TRANSOP_AES_NONCE_SIZE, inbuf, in_len );
 
             /* Round up to next whole AES adding at least one byte. */
             len2 = ( (len / sa->block_size) + 1 ) * sa->block_size;
-            assembly[ len2-1 ] = (len2-len);
+            assembly[ len2-1 ] = (len2 - len);
             traceEvent( TRACE_DEBUG, "padding = %u", assembly[ len2-1 ] );
 
-            EVP_CIPHER_CTX_reset(sa->ctx);
             memset( &(sa->enc_ivec), 0, N2N_AES_IVEC_SIZE );
+#if USE_OPENSSL
+            EVP_CIPHER_CTX_reset(sa->ctx);
 
             EVP_EncryptInit( sa->ctx, sa->cipher, sa->key, sa->enc_ivec );
             EVP_CIPHER_CTX_set_padding(sa->ctx, 0);
             EVP_EncryptUpdate( sa->ctx, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, &len3, assembly, len2 );
             EVP_EncryptFinal( sa->ctx, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE + len3, &len3 );
-
+#elif USE_NETTLE
+            CBC_SET_IV ( &sa->enc_ctx, sa->enc_ivec );
+            CBC_ENCRYPT ( &sa->enc_ctx, aes_encrypt, len2, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, assembly );
+#elif USE_GCRYPT
+            gcry_cipher_reset( sa->cipher );
+            gcry_cipher_setiv( sa->cipher, sa->enc_ivec, sa->block_size );
+            len3 = out_len - TRANSOP_AES_VER_SIZE - TRANSOP_AES_SA_SIZE;
+            gcry_cipher_encrypt( sa->cipher, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len3, assembly, len2 );
+#elif USE_BCRYPT
+            len3 = out_len - TRANSOP_AES_VER_SIZE - TRANSOP_AES_SA_SIZE;
+            BCryptEncrypt( sa->hKey, assembly, len2, NULL,
+                           sa->enc_ivec, sa->block_size,
+                           outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len3, &len3, 0 );
+#endif
             len2 += TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE; /* size of data carried in UDP. */
         }
         else
@@ -206,7 +288,7 @@ static ssize_t aes_find_sa( const transop_aes_t * priv, const n2n_sa_t req_id )
     
     for (i=0; i < priv->num_sa; ++i)
     {
-        const sa_aes_t * sa=NULL;
+        const sa_aes_t* sa = NULL;
 
         sa = &(priv->sa[i]);
         if (req_id == sa->sa_id)
@@ -271,18 +353,30 @@ static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
                     uint8_t padding;
                     int len3 = -1;
 
-                    EVP_CIPHER_CTX_reset(sa->ctx);
                     memset( &(sa->dec_ivec), 0, N2N_AES_IVEC_SIZE );
+#if USE_OPENSSL
+                    EVP_CIPHER_CTX_reset(sa->ctx);
 
                     EVP_DecryptInit( sa->ctx, sa->cipher, sa->key, sa->dec_ivec );
                     EVP_CIPHER_CTX_set_padding(sa->ctx, 0);
                     EVP_DecryptUpdate( sa->ctx, assembly, &len3, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len );
                     EVP_DecryptFinal( sa->ctx, assembly + len3, &len3 );
+#elif USE_NETTLE
+                    CBC_SET_IV ( &sa->dec_ctx, sa->dec_ivec );
+                    CBC_DECRYPT ( &sa->dec_ctx, aes_decrypt, len, assembly, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE );
+#elif USE_GCRYPT
+                    gcry_cipher_reset( sa->cipher );
+                    gcry_cipher_setiv( sa->cipher, sa->dec_ivec, sa->block_size );
+                    gcry_cipher_decrypt( sa->cipher, assembly, N2N_PKT_BUF_SIZE, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len );
+#elif USE_BCRYPT
+                    BCryptDecrypt( sa->hKey, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len, NULL,
+                                   sa->dec_ivec, sa->block_size,
+                                   assembly, N2N_PKT_BUF_SIZE, &len3, 0 );
+#endif
 
                     /* last byte is how much was padding: max value should be
                      * AES_BLOCKSIZE-1 */
                     padding = assembly[ len-1 ] & 0xff; 
-
                     if ( len >= (padding + TRANSOP_AES_NONCE_SIZE))
                     {
                         /* strictly speaking for this to be an ethernet packet
@@ -343,7 +437,7 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
     if ( priv->num_sa < N2N_AES_NUM_SA )
     {
         const char * op = (const char *)cspec->opaque;
-        const char * sep = index( op, '_' );
+        const char * sep = strchr( op, '_' );
 
         if ( sep )
         {
@@ -367,11 +461,36 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
                 sa_aes_t * sa = &(priv->sa[priv->num_sa]);
                 memset( &(sa->enc_ivec), 0, N2N_AES_IVEC_SIZE );
                 memset( &(sa->dec_ivec), 0, N2N_AES_IVEC_SIZE );
+#if USE_OPENSSL
                 sa->cipher = aes_best_keysize(pstat);
                 sa->block_size = EVP_CIPHER_block_size(sa->cipher);
+                unsigned int key_length = EVP_CIPHER_key_length(sa->cipher) * 8;
+#elif USE_NETTLE
+                uint32_t key_length = aes_best_keysize(pstat);
+                sa->block_size = AES_BLOCK_SIZE;
+                aes_set_encrypt_key( &sa->enc_ctx.ctx, key_length / 8, sa->key );
+                aes_set_decrypt_key( &sa->dec_ctx.ctx, key_length / 8, sa->key );
+                sa->key_size = key_length;
+#elif USE_GCRYPT
+                if (sa->cipher)
+                    gcry_cipher_close( sa->cipher );
+                int _algo = aes_best_keysize(pstat);
+                unsigned int key_length = gcry_cipher_get_algo_keylen ( _algo );
+                gcry_cipher_open ( &sa->cipher, _algo, GCRY_CIPHER_MODE_CBC, 0 );
+                gcry_cipher_setkey ( sa->cipher, sa->key, key_length );
+                sa->block_size = gcry_cipher_get_algo_blklen ( _algo );
+                key_length *= 8;
+#elif USE_BCRYPT
+                if (sa->hKey != NULL)
+                    BCryptDestroyKey ( sa->hKey );
+                DWORD key_length = aes_best_keysize(pstat);
+                BCryptSetProperty( sa->hAlgorithm, BCRYPT_KEY_LENGTH, &key_length, sizeof(DOWRD), 0 );
+                BCryptGetProperty( sa->hAlgorithm, BCRYPT_BLOCK_LENGTH, NULL, 0, &sa->block_size, 0 );
+                BCryptGenerateSymmetricKey( sa->hAlgorithm, &sa->hKey, NULL, 0, sa->key, key_length / 8, 0 );
+#endif
                 
                 traceEvent( TRACE_DEBUG, "transop_addspec_aes sa_id=%u, %u bits data=%s.\n",
-                            priv->sa[priv->num_sa].sa_id, EVP_CIPHER_key_length(sa->cipher) * 8, sep+1);
+                            priv->sa[priv->num_sa].sa_id, key_length, sep+1);
                 
                 ++(priv->num_sa);
                 retval = 0;
@@ -473,8 +592,25 @@ int transop_aes_init( n2n_trans_op_t * ttt )
             memset( &(sa->spec), 0, sizeof(n2n_cipherspec_t) );
             memset( &(sa->enc_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
             memset( &(sa->dec_ivec), 0, sizeof(N2N_AES_IVEC_SIZE) );
-            memset( &(sa->key), 0, sizeof(N2N_MAX_KEYSIZE) );
+            memset( &(sa->key), 0, sizeof(sa->key) );
+#if USE_OPENSSL
             sa->ctx = EVP_CIPHER_CTX_new();
+#elif USE_NETTLE
+            yarrow256_init( &sa->random, 0, NULL );
+            uint8_t rnd_data[YARROW256_SEED_FILE_SIZE];
+            int fd = open("/dev/urandom", O_RDONLY);
+            read(fd, rnd_data, sizeof(rnd_data));
+            close(fd);
+            yarrow256_seed( &sa->random, YARROW256_SEED_FILE_SIZE, rnd_data );
+#elif USE_GCRYPT
+            sa->cipher = NULL;
+#elif USE_BCRYPT
+            BCryptOpenAlgorithmProvider ( &sa->hAlgorithm, BCRYPT_AES_ALGORITHM, NULL, 0 );
+            BCryptSetProperty ( sa->hAlgorithm, BCRYPT_CHAINING_MODE,
+                                BCRYPT_CHAIN_MODE_CBC, sizeof(BCRYPT_CHAIN_MODE_CBC), 0 );
+            BCryptOpenAlgorithmProvider ( &sa->hRandom, BCRYPT_RNG_ALGORITHM, NULL, 0 );
+            sa->hKey = NULL;
+#endif
         }
 
         retval = 0;

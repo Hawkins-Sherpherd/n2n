@@ -14,32 +14,24 @@
 import os
 import sys
 import time
-import random
+import secrets
 
-NUM_KEYS=365*10
-KEY_LIFE=60*60*24
-KEY_LEN=16
+# a year worth of keys
+NUM_KEYS = 365 * 10
+# a is valid for one day
+KEY_LIFE = 60 * 60 * 24
+KEY_LEN = 32
 
-now=time.time()
-start_sa=random.randint( 0, 0xffffffff )
-
-random.seed(now) # note now is a floating point time value
-
-def rand_key():
-    key=str()
-    for i in range(0,KEY_LEN):
-        key += "%02x"%( random.randint( 0, 255 ) )
-
-    return key
+now = time.time()
+start_sa = secrets.randbelow( 0xffffffff )
 
 for i in range(0,NUM_KEYS):
     from_time  = now + (KEY_LIFE * (i-1) )
     until_time = now + (KEY_LIFE * (i+1) )
-    key = rand_key()
+    key = secrets.token_hex(KEY_LEN)
     sa_idx = start_sa + i
+    # use AES
     transform_id = 3
     #random.randint( 2, 3 )
 
     sys.stdout.write("%d %d %d %d_%s\n"%(from_time, until_time, transform_id,sa_idx, key) )
-
-

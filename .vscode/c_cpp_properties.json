@@ -34,7 +34,9 @@
                 "${workspaceFolder}"
             ],
             "defines": [
-                "_POSIX_C_SOURCE=200809"
+                "_POSIX_C_SOURCE=200809",
+                "N2N_HAVE_AES",
+                "USE_NETTLE=1"
             ],
             "intelliSenseMode": "clang-x64",
             "browse": {
@@ -58,12 +60,17 @@
                 "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/um",
                 "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/ucrt",
                 "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/shared",
-                "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/winrt"
+                "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/winrt",
+                "/run/media/max/Volume/Windows/VS14/WK/include/um",
+                "/run/media/max/Volume/Windows/VS14/WK/include/ucrt",
+                "/run/media/max/Volume/Windows/VS14/WK/include/shared"
             ],
             "defines": [
                 "_DEBUG",
-                "UNICODE",
-                "_UNICODE"
+                "_UNICODE",
+                "_WIN32",
+                "N2N_HAVE_AES",
+                "USE_BCRYPT=1"
             ],
             "intelliSenseMode": "msvc-x64",
             "browse": {
@@ -73,7 +80,10 @@
                     "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/um",
                     "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/ucrt",
                     "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/shared",
-                    "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/winrt"
+                    "C:/Program Files (x86)/Windows Kits/10/Include/10.0.16299.0/winrt",
+                    "/run/media/max/Volume/Windows/VS14/WK/include/um",
+                    "/run/media/max/Volume/Windows/VS14/WK/include/ucrt",
+                    "/run/media/max/Volume/Windows/VS14/WK/include/shared"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": ""
