@@ -34,6 +34,8 @@
 /* ip helper api */
 #include <iphlpapi.h>
 
+#include <VersionHelpers.h>
+
 /* for CLSIDFromString */
 #include <objbase.h>
 
@@ -49,6 +51,7 @@
 
 #include "wintap.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #ifdef _MSC_VER
 #include "getopt.h"
@@ -78,16 +81,16 @@ typedef unsigned long in_addr_t;
 
 typedef struct tuntap_dev {
 	HANDLE device_handle;
-	WCHAR  device_name[40]; /* legnth of a CLSID is 38 */
+	wchar_t  device_name[40]; /* legnth of a CLSID is 38 */
 	NET_IFINDEX  ifIdx;
 	NET_LUID luid;
 	OVERLAPPED overlap_read, overlap_write;
-	short        dyn_ip4;
+	bool         dyn_ip4;
 	uint8_t      mac_addr[6];
 	uint32_t     ip_addr, device_mask;
 	struct in6_addr ip6_addr;
 	uint8_t      ip6_prefixlen;
-	unsigned int mtu;
+	uint32_t     mtu;
 } tuntap_dev;
 
 #define W32_ERROR(rc, error_string) \

@@ -37,11 +37,11 @@ static int get_adapter_luid(PWSTR device_name, NET_LUID* luid) {
     return 0;
 }
 
-static DWORD set_dhcp(struct tuntap_dev* device) {
-    WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
+static uint32_t set_dhcp(struct tuntap_dev* device) {
+    wchar_t if_name[MAX_ADAPTER_NAME_LENGTH];
     /* lets hope that these are big enough */
-    WCHAR windows_path[128], cmd[128], netsh[256];
-    DWORD rc = 0;
+    wchar_t windows_path[128], cmd[128], netsh[256];
+    uint32_t rc = 0;
 
     STARTUPINFO si = { 0 };
     PROCESS_INFORMATION pi = { 0 };
@@ -76,9 +76,9 @@ static uint8_t netmask_to_prefixlen(uint32_t netmask) {
     return prefixlen;
 }
 
-static DWORD set_static_ip_address(struct tuntap_dev* device) {
+static uint32_t set_static_ip_address(struct tuntap_dev* device) {
 #if 1
-    DWORD rc;
+    uint32_t rc;
     MIB_UNICASTIPADDRESS_ROW ip_row;
     PMIB_UNICASTIPADDRESS_TABLE ip_address_table = NULL;
 
@@ -118,11 +118,11 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 
     return rc;
 #else
-    WCHAR if_name[MAX_ADAPTER_NAME_LENGTH];
-    WCHAR windows_path[64], cmd[128], netsh[256];
+    wchar_t if_name[MAX_ADAPTER_NAME_LENGTH];
+    wchar_t windows_path[64], cmd[128], netsh[256];
     char ip[INET6_ADDRSTRLEN], mask[INET_ADDRSTRLEN];
     SHELLEXECUTEINFO shex;
-    DWORD rc;
+    uint32_t rc;
 
     ConvertInterfaceLuidToNameW(&device->luid, if_name, MAX_ADAPTER_NAME_LENGTH);
     GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
@@ -159,11 +159,11 @@ static DWORD set_static_ip_address(struct tuntap_dev* device) {
 int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     HKEY key, key2;
     LONG rc;
-    WCHAR regpath[MAX_PATH];
-    WCHAR adapterid[40]; /* legnth of a CLSID is 38 */
-    WCHAR adaptername[MAX_ADAPTER_NAME_LENGTH];
-    WCHAR adaptername_target[MAX_ADAPTER_NAME_LENGTH] = L"";
-    WCHAR tapname[MAX_PATH];
+    wchar_t regpath[MAX_PATH];
+    wchar_t adapterid[40]; /* legnth of a CLSID is 38 */
+    wchar_t adaptername[MAX_ADAPTER_NAME_LENGTH];
+    wchar_t adaptername_target[MAX_ADAPTER_NAME_LENGTH] = L"";
+    wchar_t tapname[MAX_PATH];
     long len;
     int found = 0;
     int i, err;
@@ -342,10 +342,10 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
 /* ************************************************ */
 
 ssize_t tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) {
-    DWORD read_size, last_err;
+    uint32_t read_size, last_err;
 
     ResetEvent(tuntap->overlap_read.hEvent);
-    if (ReadFile(tuntap->device_handle, buf, (DWORD) len, &read_size, &tuntap->overlap_read)) {
+    if (ReadFile(tuntap->device_handle, buf, (uint32_t) len, &read_size, &tuntap->overlap_read)) {
         //printf("tun_read(len=%d)\n", read_size);
         return (ssize_t) read_size;
     }
@@ -368,14 +368,14 @@ ssize_t tuntap_read(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) {
 /* ************************************************ */
 
 ssize_t tuntap_write(struct tuntap_dev *tuntap, unsigned char *buf, size_t len) {
-    DWORD write_size;
+    uint32_t write_size;
 
     //printf("tun_write(len=%d)\n", len);
 
     ResetEvent(tuntap->overlap_write.hEvent);
     if (WriteFile(tuntap->device_handle,
         buf,
-        (DWORD) len,
+        (uint32_t) len,
         &write_size,
         &tuntap->overlap_write))
     {
@@ -406,9 +406,9 @@ void tuntap_close(struct tuntap_dev *tuntap) {
 }
 
 int tuntap_restart( tuntap_dev* device ) {
-    WCHAR tapname[MAX_PATH];
-    ULONG status = TRUE;
-    DWORD rc;
+    wchar_t tapname[MAX_PATH];
+    uint32_t status = true;
+    uint32_t rc;
     long len;
 
     CloseHandle(device->device_handle);
@@ -464,7 +464,7 @@ int tuntap_restart( tuntap_dev* device ) {
  * address changes. */
 void tuntap_get_address(struct tuntap_dev *tuntap) {
     IP_ADAPTER_ADDRESSES* adapter_list;
-    ULONG size = 0;
+    uint32_t size = 0;
 
     if (GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_FRIENDLY_NAME, NULL, NULL, &size) != ERROR_BUFFER_OVERFLOW)
         return;

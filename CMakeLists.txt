@@ -59,9 +59,10 @@ add_library(n2n OBJECT
 set(OBJECTS $<TARGET_OBJECTS:n2n>)
 
 if(DEFINED WIN32)
-
 set(CMAKE_RC_FLAGS /nologo)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477 /wd4267")
+if (MSVC)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477 /wd4267 /utf-8")
+endif(MSVC)
 
 add_subdirectory(win32)
 set(OBJECTS

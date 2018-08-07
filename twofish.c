@@ -43,7 +43,7 @@
 #include "twofish.h"
 
 
-bool TwoFish_srand=TRUE;				/* if TRUE, first call of TwoFishInit will seed rand(); */
+bool TwoFish_srand=true;				/* if true, first call of TwoFishInit will seed rand(); */
 /* of TwoFishInit */
 
 /* Fixed 8x8 permutation S-boxes */
@@ -99,7 +99,7 @@ static const uint8_t TwoFish_P[2][256] =
     }
   };
 
-static bool TwoFish_MDSready=FALSE;
+static bool TwoFish_MDSready=false;
 static uint32_t TwoFish_MDS[4][256]; /* TwoFish_MDS matrix */
 
 
@@ -172,10 +172,10 @@ TWOFISH *TwoFishInit(const uint8_t *userkey, uint64_t keysize)
       _TwoFish_MakeSubKeys(tfdata);			/* generate subkeys */
       _TwoFish_ResetCBC(tfdata);			/* reset the CBC */
       tfdata->output=NULL;				/* nothing to output yet */
-      tfdata->dontflush=FALSE;				/* reset decrypt skip block flag */
+      tfdata->dontflush=false;				/* reset decrypt skip block flag */
       if(TwoFish_srand)
       {
-          TwoFish_srand=FALSE;
+          TwoFish_srand=false;
           /* REVISIT: BbMaj7 : Should choose something with less predictability
            * particularly for embedded targets with no real-time clock. */
           srand((unsigned int)time(NULL)); 
@@ -250,7 +250,7 @@ uint64_t TwoFishEncryptRaw(uint8_t *in,
 			    TWOFISH *tfdata)
 {	_TwoFish_ResetCBC(tfdata);							/* reset CBC flag. */
   tfdata->output=out;							/* output straight into output buffer. */
-  return _TwoFish_CryptRaw(in,out,len,FALSE,tfdata);	/* and go for it. */
+  return _TwoFish_CryptRaw(in,out,len,false,tfdata);	/* and go for it. */
 }
 
 /*	TwoFish Raw Decryption
@@ -271,7 +271,7 @@ uint64_t TwoFishDecryptRaw(uint8_t *in,
 			    TWOFISH *tfdata)
 {	_TwoFish_ResetCBC(tfdata);							/* reset CBC flag. */
   tfdata->output=out;							/* output straight into output buffer. */
-  return _TwoFish_CryptRaw(in,out,len,TRUE,tfdata);	/* and go for it. */
+  return _TwoFish_CryptRaw(in,out,len,true,tfdata);	/* and go for it. */
 }
 
 /*	TwoFish Free
@@ -412,7 +412,7 @@ uint64_t TwoFishEncrypt(uint8_t *in,
 
   if(in!=NULL && out!=NULL && ilen>0 && tfdata!=NULL) /* if we got usable stuff, we'll do it. */
     {	if(*out==NULL)									/* if OUT points to a NULL pointer... */
-	*out=TwoFishAlloc(ilen,binhex,FALSE,tfdata);  /* ...we'll (re-)allocate buffer space. */
+	*out=TwoFishAlloc(ilen,binhex,false,tfdata);  /* ...we'll (re-)allocate buffer space. */
       if(*out!=NULL)
 	{	tfdata->output=*out;							/* set output buffer. */
 	  tfdata->header.salt=rand()*65536+rand();		/* toss in some salt. */
@@ -423,10 +423,10 @@ uint64_t TwoFishEncrypt(uint8_t *in,
 	  memcpy(tfdata->header.magic,TwoFish_MAGIC,TwoFish_MAGIC_LEN); /* set the magic. */
 	  olen=TwoFish_BLOCK_SIZE;						/* set output counter. */
 	  _TwoFish_ResetCBC(tfdata);						/* reset the CBC flag */
-	  _TwoFish_BlockCrypt((uint8_t *)&(tfdata->header),*out,olen,FALSE,tfdata); /* encrypt first block (without flush on 16 byte boundary). */
-	  olen+=_TwoFish_CryptRawCBC(in,*out+TwoFish_BLOCK_SIZE,ilen,FALSE,tfdata);	/* and encrypt the rest (we do not reset the CBC flag). */
+	  _TwoFish_BlockCrypt((uint8_t *)&(tfdata->header),*out,olen,false,tfdata); /* encrypt first block (without flush on 16 byte boundary). */
+	  olen+=_TwoFish_CryptRawCBC(in,*out+TwoFish_BLOCK_SIZE,ilen,false,tfdata);	/* and encrypt the rest (we do not reset the CBC flag). */
 	  if(binhex)									/* if binhex... */
-	    {	_TwoFish_BinHex(*out,olen,TRUE);		/* ...convert output to binhex... */
+	    {	_TwoFish_BinHex(*out,olen,true);		/* ...convert output to binhex... */
 	      olen*=2;								/* ...and size twice as large. */
 	    }
 	  tfdata->output=*out;
@@ -479,10 +479,10 @@ uint64_t TwoFishDecrypt(uint8_t *in,
 
   if(in!=NULL && out!=NULL && ilen>0 && tfdata!=NULL) /* if we got usable stuff, we'll do it. */
     {	if(*out==NULL)									/* if OUT points to a NULL pointer... */
-	*out=TwoFishAlloc(ilen,binhex,TRUE,tfdata); /* ...we'll (re-)allocate buffer space. */
+	*out=TwoFishAlloc(ilen,binhex,true,tfdata); /* ...we'll (re-)allocate buffer space. */
       if(*out!=NULL)
 	{	if(binhex)									/* if binhex... */
-	    {	_TwoFish_BinHex(in,ilen,FALSE);		/* ...convert input to values... */
+	    {	_TwoFish_BinHex(in,ilen,false);		/* ...convert input to values... */
 	      ilen/=2;								/* ...and size half as much. */
 	    }
 	  _TwoFish_ResetCBC(tfdata);						/* reset the CBC flag. */
@@ -492,7 +492,7 @@ uint64_t TwoFishDecrypt(uint8_t *in,
 	    return 0;
 	  tfdata->output=tbuf;					/* set output to temp buffer. */
 
-	  olen=_TwoFish_CryptRawCBC(in,tbuf,ilen,TRUE,tfdata)-TwoFish_BLOCK_SIZE; /* decrypt the whole thing. */
+	  olen=_TwoFish_CryptRawCBC(in,tbuf,ilen,true,tfdata)-TwoFish_BLOCK_SIZE; /* decrypt the whole thing. */
 	  memcpy(&(tfdata->header),tbuf,TwoFish_BLOCK_SIZE); /* copy first block into header. */
 	  tfdata->output=*out;
 	  for(elen=0;elen<TwoFish_MAGIC_LEN;elen++)	/* compare magic. */
@@ -549,7 +549,7 @@ void _TwoFish_PrecomputeMDSmatrix(void)	/* precompute the TwoFish_MDS matrix */
 	mY[TwoFish_P_30] << 16 |
 	mX[TwoFish_P_30] << 24;
     }
-  TwoFish_MDSready=TRUE;
+  TwoFish_MDSready=true;
 }
 
 
@@ -749,7 +749,7 @@ void _TwoFish_BlockCrypt(uint8_t *in,uint8_t *out,uint64_t size,int decrypt,TWOF
 	  _TwoFish_FlushOutput(tfdata->qBlockCrypt,TwoFish_BLOCK_SIZE,tfdata);
 	  _TwoFish_FlushOutput(CnMinusOne,size,tfdata);  /* old Cn-1 becomes new partial Cn */
 	}
-      tfdata->qBlockDefined=FALSE;
+      tfdata->qBlockDefined=false;
     }
 }
 
@@ -759,18 +759,18 @@ void _TwoFish_qBlockPush(uint8_t *p,uint8_t *c,TWOFISH *tfdata)
   memcpy(tfdata->prevCipher,tfdata->qBlockPlain,TwoFish_BLOCK_SIZE);
   memcpy(tfdata->qBlockPlain,p,TwoFish_BLOCK_SIZE);
   memcpy(tfdata->qBlockCrypt,c,TwoFish_BLOCK_SIZE);
-  tfdata->qBlockDefined=TRUE;
+  tfdata->qBlockDefined=true;
 }
 
 void _TwoFish_qBlockPop(uint8_t *p,uint8_t *c,TWOFISH *tfdata)
 {	memcpy(p,tfdata->qBlockPlain,TwoFish_BLOCK_SIZE );
   memcpy(c,tfdata->qBlockCrypt,TwoFish_BLOCK_SIZE );
-  tfdata->qBlockDefined=FALSE;
+  tfdata->qBlockDefined=false;
 }
 
 /* Reset's the CBC flag and zero's PrevCipher (through qBlockPlain) (important) */
 void _TwoFish_ResetCBC(TWOFISH *tfdata)
-{	tfdata->qBlockDefined=FALSE;
+{	tfdata->qBlockDefined=false;
   memset(tfdata->qBlockPlain,0,TwoFish_BLOCK_SIZE);
 }
 
@@ -779,7 +779,7 @@ void _TwoFish_FlushOutput(uint8_t *b,uint64_t len,TWOFISH *tfdata)
 
   for(i=0;i<len && !tfdata->dontflush;i++)
     *tfdata->output++ = *b++;
-  tfdata->dontflush=FALSE;
+  tfdata->dontflush=false;
 }
 
 void _TwoFish_BlockCrypt16(uint8_t *in,uint8_t *out,bool decrypt,TWOFISH *tfdata)

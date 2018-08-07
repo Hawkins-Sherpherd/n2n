@@ -35,20 +35,11 @@
 #ifndef __TWOFISH_LIBRARY_HEADER__
 #define __TWOFISH_LIBRARY_HEADER__
 
-#ifndef FALSE
-#define FALSE	0
-#endif
-#ifndef TRUE
-#define TRUE	!FALSE
-#endif
-#ifndef bool
-#define bool	int
-#endif
-
 #ifdef WIN32
 #include "win32/n2n_win32.h"
 #endif
 
+#include <stdbool.h>
 #include <stdint.h> /* defines uintN_t types */
 
 #ifdef __sun__ /* Should be HAVE_SYS_TYPES */

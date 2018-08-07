@@ -2140,9 +2140,16 @@ int main(int argc, char* argv[])
     cap_free(caps_original);
 #endif
 #if _WIN32
+    SetConsoleOutputCP(65001);
+
     if (scm_startup(L"edge") == 1) {
         /* edge is running as a service, so quit */
         return 0;
+    }
+
+    if ( !IsWindows7OrGreater() ) {
+        traceEvent( TRACE_ERROR, "This Windows Version is not supported. Windows 7 or newer is required." );
+        return 1;
     }
 #endif
 

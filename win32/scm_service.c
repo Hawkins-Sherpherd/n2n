@@ -12,7 +12,7 @@ static bool scm_startup_complete = false;
 
 extern int main(int argc, char* argv[]);
 
-int scm_start_service(DWORD, LPWSTR*);
+int scm_start_service(uint32_t, wchar_t**);
 
 wchar_t scm_name[_SCM_NAME_LENGTH];
 
@@ -43,7 +43,7 @@ int scm_startup(wchar_t* name) {
     return 1;
 }
 
-static VOID ReportSvcStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHint) {
+static void ReportSvcStatus(uint32_t dwCurrentState, uint32_t dwWin32ExitCode, uint32_t dwWaitHint) {
     service_status.dwCurrentState = dwCurrentState;
     service_status.dwWin32ExitCode = dwWin32ExitCode;
     service_status.dwWaitHint = dwWaitHint;
@@ -81,7 +81,7 @@ static VOID WINAPI service_handler(DWORD dwControl) {
 
 int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
 #define ARGUMENT_LENGTH 4048
-    WCHAR regpath[1024];
+    wchar_t regpath[1024];
     HKEY key;
 
     swprintf(regpath, sizeof(regpath), REGKEY_TEMPLATE "\\%s", scm_name);
@@ -94,8 +94,8 @@ int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
     }
 
     wchar_t data[ARGUMENT_LENGTH];
-    DWORD len = ARGUMENT_LENGTH;
-    DWORD type = 0;
+    uint32_t len = ARGUMENT_LENGTH;
+    uint32_t type = 0;
     if (RegGetValue(key, NULL, L"Arguments", RRF_RT_REG_SZ | RRF_RT_REG_MULTI_SZ, &type, &data, &len)) {
         W32_ERROR(GetLastError(), error)
         traceEvent(TRACE_ERROR, "Registry key HKLM\\%ls has no string value 'Arguments': %ls", regpath, error);
@@ -167,7 +167,7 @@ int get_argv_from_registry(wchar_t* scm_name, char*** argv) {
     return argc;
 }
 
-int scm_start_service(DWORD num, LPWSTR* args) {
+int scm_start_service(uint32_t num, wchar_t** args) {
     wcsncpy(scm_name, args[0], _SCM_NAME_LENGTH);
 
     service_status_handle = RegisterServiceCtrlHandlerW(scm_name, service_handler);

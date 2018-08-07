@@ -229,15 +229,15 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
 #elif USE_NETTLE
             yarrow256_random( &sa->random, sizeof(uint32_t), (uint8_t*) pnonce );
 #elif USE_GCRYPT
-            gcry_create_nonce((unsigned char*) pnonce, sizeof(uint32_t));
+            gcry_create_nonce((uint8_t*) pnonce, sizeof(uint32_t));
 #elif USE_BCRYPT
-            BCryptGenRandom ( sa->hRandom, (unsigned char*) pnonce, sizeof(uint32_t), 0 );
+            BCryptGenRandom ( sa->hRandom, (uint8_t*) pnonce, sizeof(uint32_t), 0 );
 #endif
             memcpy( assembly + TRANSOP_AES_NONCE_SIZE, inbuf, in_len );
 
             /* Round up to next whole AES adding at least one byte. */
             len2 = ( (len / sa->block_size) + 1 ) * sa->block_size;
-            assembly[ len2-1 ] = (len2 - len);
+            assembly[ len2 - 1 ] = ((uint8_t) (len2 - (size_t) len));
             traceEvent( TRACE_DEBUG, "padding = %u", assembly[ len2-1 ] );
 
             memset( &(sa->enc_ivec), 0, N2N_AES_IVEC_SIZE );
@@ -258,7 +258,7 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
             gcry_cipher_encrypt( sa->cipher, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len3, assembly, len2 );
 #elif USE_BCRYPT
             len3 = out_len - TRANSOP_AES_VER_SIZE - TRANSOP_AES_SA_SIZE;
-            BCryptEncrypt( sa->hKey, assembly, len2, NULL,
+            BCryptEncrypt( sa->hKey, assembly, (uint32_t) len2, NULL,
                            sa->enc_ivec, sa->block_size,
                            outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len3, &len3, 0 );
 #endif
@@ -369,7 +369,7 @@ static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
                     gcry_cipher_setiv( sa->cipher, sa->dec_ivec, sa->block_size );
                     gcry_cipher_decrypt( sa->cipher, assembly, N2N_PKT_BUF_SIZE, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len );
 #elif USE_BCRYPT
-                    BCryptDecrypt( sa->hKey, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len, NULL,
+                    BCryptDecrypt( sa->hKey, (uint8_t*) inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, (uint32_t) len, NULL,
                                    sa->dec_ivec, sa->block_size,
                                    assembly, N2N_PKT_BUF_SIZE, &len3, 0 );
 #endif
@@ -483,8 +483,8 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
 #elif USE_BCRYPT
                 if (sa->hKey != NULL)
                     BCryptDestroyKey ( sa->hKey );
-                DWORD key_length = aes_best_keysize(pstat);
-                BCryptSetProperty( sa->hAlgorithm, BCRYPT_KEY_LENGTH, &key_length, sizeof(DOWRD), 0 );
+                uint32_t key_length = aes_best_keysize(pstat);
+                BCryptSetProperty( sa->hAlgorithm, BCRYPT_KEY_LENGTH, (uint8_t*) &key_length, sizeof(uint32_t), 0 );
                 BCryptGetProperty( sa->hAlgorithm, BCRYPT_BLOCK_LENGTH, NULL, 0, &sa->block_size, 0 );
                 BCryptGenerateSymmetricKey( sa->hAlgorithm, &sa->hKey, NULL, 0, sa->key, key_length / 8, 0 );
 #endif
@@ -607,7 +607,7 @@ int transop_aes_init( n2n_trans_op_t * ttt )
 #elif USE_BCRYPT
             BCryptOpenAlgorithmProvider ( &sa->hAlgorithm, BCRYPT_AES_ALGORITHM, NULL, 0 );
             BCryptSetProperty ( sa->hAlgorithm, BCRYPT_CHAINING_MODE,
-                                BCRYPT_CHAIN_MODE_CBC, sizeof(BCRYPT_CHAIN_MODE_CBC), 0 );
+                                (uint8_t*) BCRYPT_CHAIN_MODE_CBC, sizeof(BCRYPT_CHAIN_MODE_CBC), 0 );
             BCryptOpenAlgorithmProvider ( &sa->hRandom, BCRYPT_RNG_ALGORITHM, NULL, 0 );
             sa->hKey = NULL;
 #endif
