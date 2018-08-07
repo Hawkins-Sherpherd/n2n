@@ -39,8 +39,8 @@ struct sa_aes
     EVP_CIPHER_CTX      *ctx;           /* cipher context */
     const EVP_CIPHER    *cipher;        /* libcrypt cipher */
 #elif USE_NETTLE
-    struct CBC_CTX(struct aes_ctx, AES_BLOCK_SIZE) enc_ctx;
-    struct CBC_CTX(struct aes_ctx, AES_BLOCK_SIZE) dec_ctx;
+    struct aes_ctx      enc_ctx;
+    struct aes_ctx      dec_ctx;
     uint32_t            key_size;
     struct yarrow256_ctx random;
 #elif USE_GCRYPT
@@ -249,8 +249,8 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
             EVP_EncryptUpdate( sa->ctx, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, &len3, assembly, len2 );
             EVP_EncryptFinal( sa->ctx, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE + len3, &len3 );
 #elif USE_NETTLE
-            CBC_SET_IV ( &sa->enc_ctx, sa->enc_ivec );
-            CBC_ENCRYPT ( &sa->enc_ctx, aes_encrypt, len2, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, assembly );
+            cbc_encrypt( &sa->enc_ctx, (nettle_cipher_func*) &aes_encrypt, (size_t) sa->block_size, sa->enc_ivec, len2,
+                         outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, assembly );
 #elif USE_GCRYPT
             gcry_cipher_reset( sa->cipher );
             gcry_cipher_setiv( sa->cipher, sa->enc_ivec, sa->block_size );
@@ -362,8 +362,8 @@ static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
                     EVP_DecryptUpdate( sa->ctx, assembly, &len3, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len );
                     EVP_DecryptFinal( sa->ctx, assembly + len3, &len3 );
 #elif USE_NETTLE
-                    CBC_SET_IV ( &sa->dec_ctx, sa->dec_ivec );
-                    CBC_DECRYPT ( &sa->dec_ctx, aes_decrypt, len, assembly, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE );
+                    cbc_decrypt( &sa->dec_ctx, (nettle_cipher_func*) &aes_decrypt, (size_t) sa->block_size, sa->dec_ivec, len, 
+                                 assembly, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE );
 #elif USE_GCRYPT
                     gcry_cipher_reset( sa->cipher );
                     gcry_cipher_setiv( sa->cipher, sa->dec_ivec, sa->block_size );
@@ -468,8 +468,8 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
 #elif USE_NETTLE
                 uint32_t key_length = aes_best_keysize(pstat);
                 sa->block_size = AES_BLOCK_SIZE;
-                aes_set_encrypt_key( &sa->enc_ctx.ctx, key_length / 8, sa->key );
-                aes_set_decrypt_key( &sa->dec_ctx.ctx, key_length / 8, sa->key );
+                aes_set_encrypt_key( &sa->enc_ctx, key_length / 8, sa->key );
+                aes_set_decrypt_key( &sa->dec_ctx, key_length / 8, sa->key );
                 sa->key_size = key_length;
 #elif USE_GCRYPT
                 if (sa->cipher)
