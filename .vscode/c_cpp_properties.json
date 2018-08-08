@@ -36,7 +36,7 @@
             "defines": [
                 "_POSIX_C_SOURCE=200809",
                 "N2N_HAVE_AES",
-                "USE_NETTLE=1"
+                "USE_MBEDTLS=1"
             ],
             "intelliSenseMode": "clang-x64",
             "browse": {

@@ -29,6 +29,21 @@
 #include <sys/stat.h>
 #include "minilzo.h"
 
+#ifdef N2N_HAVE_AES
+#if USE_OPENSSL
+#include <openssl/crypto.h>
+#elif USE_NETTLE
+#include <nettle/version.h>
+#elif USE_MBEDTLS
+#include <mbedtls/version.h>
+#elif USE_GCRYPT
+#include <gcrypt.h>
+
+// version stored by gcry_check_version
+char const* gcrypt_version;
+#endif
+#endif
+
 #if defined(DEBUG)
 #define SOCKET_TIMEOUT_INTERVAL_SECS    5
 #define REGISTER_SUPER_INTERVAL_DFL     20 /* sec */
@@ -481,6 +496,35 @@ static void edge_deinit(n2n_edge_t * eee)
 static void readFromIPSocket( n2n_edge_t * eee );
 
 static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running );
+
+
+void print_n2n_version() {
+    printf("Welcome to n2n v.%s for %s\n"
+           "Built on %s\n",
+           n2n_sw_version, n2n_sw_osName, n2n_sw_buildDate);
+#ifdef N2N_HAVE_AES
+#if USE_MBEDTLS
+        char mbed_version[10];
+        mbedtls_version_get_string(mbed_version);
+#endif
+    printf("With AES provided by "
+#if USE_OPENSSL
+           "%s\n", OpenSSL_version(0)
+#elif USE_NETTLE
+           "nettle %d.%d\n", nettle_version_major(), nettle_version_minor()
+#elif USE_MBEDTLS
+           "mbed TLS %s\n", mbed_version
+#elif USE_GCRYPT
+           "libgcrypt %s\n", gcrypt_version
+#elif USE_BCRYPT
+           "Cryptography API: Next Generation (bcrypt.dll)\n"
+#endif
+    );
+#endif // N2N_HAVE_AES
+    printf("Copyright 2007-09 - http://www.ntop.org\n"
+           "Copyright 2018 - https://github.org/mxre/n2n\n\n");
+         
+}
 
 static void help() {
     print_n2n_version();
@@ -2151,6 +2195,15 @@ int main(int argc, char* argv[])
         traceEvent( TRACE_ERROR, "This Windows Version is not supported. Windows 7 or newer is required." );
         return 1;
     }
+#endif
+#if USE_GCRYPT
+    if (!(gcrypt_version = gcry_check_version ("1.2.0"))) {
+        fputs ("libgcrypt version mismatch\n", stderr);
+        return 1;
+    }
+
+    gcry_control (GCRYCTL_DISABLE_SECMEM, 0);
+    gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
 #endif
 
     if (-1 == edge_init(&eee) ) {

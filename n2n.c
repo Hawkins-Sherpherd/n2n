@@ -248,17 +248,6 @@ void hexdump(const uint8_t * buf, size_t len)
 
 /* *********************************************** */
 
-void print_n2n_version() {
-  printf("Welcome to n2n v.%s for %s\n"
-         "Built on %s\n"
-	     "Copyright 2007-09 - http://www.ntop.org\n"
-         "Copyright 2018 - https://github.org/mxre/n2n\n\n",
-         n2n_sw_version, n2n_sw_osName, n2n_sw_buildDate);
-}
-
-
-
-
 /** Find the peer entry in list with mac_addr equal to mac.
  *
  *  Does not modify the list.
