@@ -440,6 +440,8 @@ int transop_twofish_init( n2n_trans_op_t * ttt )
     int retval = 1;
     transop_tf_t * priv = NULL;
 
+    TwoFish_srand = false;
+
     if ( ttt->priv )
     {
         transop_deinit_twofish( ttt );

@@ -2449,6 +2449,8 @@ int main(int argc, char* argv[])
     cap_free(caps);
 #endif
 
+    srand((unsigned int) time(NULL));
+
 #ifdef N2N_HAVE_DAEMON
     if ( eee.daemon )
     {

@@ -10,7 +10,13 @@ Further Additions:
 * Specifying which Windows TAP adapter to use using `-d`
 * Linux capability awareness
 * Use API on Windows (IPHLPAPI.DLL) and Linux (ioctl) to set IP address
-* AES uses EVP for Hardware acceleration instead of pure software implementation
+* AES can use several crypto implementations:
+  - OpenSSL
+  - mbedTLS (default for OpenWRT)
+  - nettle (low level library for GnuTLS)
+  - gcrypt (part of GnuPG)
+  - bcrypt.dll (Microsoft NextGen Crypto API, Part of Windows Vista and up)
+  - libell (Embeded Linux Library, uses Kernel for Cryptography support)
 * IPv6 support
 
 Future:
