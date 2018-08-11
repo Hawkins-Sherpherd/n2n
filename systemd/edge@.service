@@ -1,5 +1,7 @@
 [Unit]
 Description=N2N network edge instance %i
+Documentation=man:edge(8)
+After=network.target
 
 [Service]
 DynamicUser=Yes

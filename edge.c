@@ -516,8 +516,12 @@ void print_n2n_version() {
            "mbed TLS %s\n", mbed_version
 #elif USE_GCRYPT
            "libgcrypt %s\n", gcrypt_version
+#elif USE_ELL
+           "Embeded Linux Library\n"
 #elif USE_BCRYPT
            "Cryptography API: Next Generation (bcrypt.dll)\n"
+#else
+#error "Unknown Crypto Library"
 #endif
     );
 #endif // N2N_HAVE_AES

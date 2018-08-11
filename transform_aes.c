@@ -21,8 +21,13 @@
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/entropy_poll.h>
+#elif USE_ELL
+#include <ell/cipher.h>
+#include <ell/random.h>
 #elif USE_BCRYPT
 #include <bcrypt.h>
+#else
+#error "Unknown Crypto Library"
 #endif
 
 #define N2N_AES_NUM_SA                  32 /* space for SAa */
@@ -55,6 +60,8 @@ struct sa_aes
     mbedtls_cipher_context_t dec_ctx;
     mbedtls_entropy_context entropy;
     mbedtls_ctr_drbg_context random;
+#elif USE_ELL
+    struct l_cipher* cipher;
 #elif USE_BCRYPT
     BCRYPT_ALG_HANDLE   hAlgorithm;
     BCRYPT_KEY_HANDLE   hKey;
@@ -103,6 +110,9 @@ static int transop_deinit_aes( n2n_trans_op_t * arg )
             mbedtls_cipher_free( &sa->dec_ctx );
             mbedtls_ctr_drbg_free( &sa->random );
             mbedtls_entropy_free( &sa->entropy );
+#elif USE_ELL
+            if (sa->cipher)
+                l_cipher_free( sa->cipher );
 #elif USE_BCRYPT
             if (sa->hKey)
                 BCryptDestroyKey( sa->hKey );
@@ -171,7 +181,7 @@ static int aes_best_keysize(size_t numBytes) {
         return GCRY_CIPHER_AES128;
     }
 }
-#elif USE_BCRYPT || USE_NETTLE || USE_MBEDTLS
+#elif USE_BCRYPT || USE_NETTLE || USE_MBEDTLS || USE_ELL
 static uint32_t aes_best_keysize(size_t numBytes) {
     if (numBytes >= AES256_KEY_BYTES )
     {
@@ -246,6 +256,8 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
             gcry_create_nonce((uint8_t*) pnonce, sizeof(uint32_t));
 #elif USE_MBEDTLS
             mbedtls_ctr_drbg_random( &sa->random, (uint8_t*) pnonce, sizeof(uint32_t));
+#elif USE_ELL
+            l_getrandom((uint8_t*) pnonce, sizeof(uint32_t));
 #elif USE_BCRYPT
             BCryptGenRandom ( sa->hRandom, (uint8_t*) pnonce, sizeof(uint32_t), 0 );
 #endif
@@ -277,6 +289,9 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
             size_t len3 = 0;
             mbedtls_cipher_crypt( &sa->enc_ctx, sa->enc_ivec, (size_t) sa->block_size,
                                   assembly, (size_t) len2, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, &len3 );
+#elif USE_ELL
+            l_cipher_set_iv( sa->cipher, sa->dec_ivec, (size_t) sa->block_size );
+            l_cipher_encrypt( sa->cipher, assembly, outbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, len2 );
 #elif USE_BCRYPT
             uint32_t len3 = out_len - TRANSOP_AES_VER_SIZE - TRANSOP_AES_SA_SIZE;
             BCryptEncrypt( sa->hKey, assembly, (uint32_t) len2, NULL,
@@ -394,6 +409,9 @@ static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
                     size_t len3 = 0;
                     mbedtls_cipher_crypt( &sa->dec_ctx, sa->dec_ivec, (size_t) sa->block_size,
                                           inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, (size_t) len, assembly, &len3 );
+#elif USE_ELL
+                    l_cipher_set_iv( sa->cipher, sa->dec_ivec, (size_t) sa->block_size );
+                    l_cipher_decrypt( sa->cipher, inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, assembly, len );
 #elif USE_BCRYPT
                     uint32_t len3 = 0;
                     BCryptDecrypt( sa->hKey, (uint8_t*) inbuf + TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE, (uint32_t) len, NULL,
@@ -520,6 +538,10 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
                 mbedtls_cipher_setkey( &sa->dec_ctx, sa->key, (int) key_length, MBEDTLS_DECRYPT );
                 mbedtls_cipher_set_padding_mode( &sa->dec_ctx, MBEDTLS_PADDING_NONE );
                 sa->block_size = (int) mbedtls_cipher_get_block_size(&sa->enc_ctx);
+#elif USE_ELL
+                uint32_t key_length = aes_best_keysize(pstat);
+                sa->cipher = l_cipher_new( L_CIPHER_AES_CBC, sa->key, key_length / 8 );
+                sa->block_size = 16; /* AES block size */
 #elif USE_BCRYPT
                 if (sa->hKey != NULL)
                     BCryptDestroyKey ( sa->hKey );
@@ -651,6 +673,8 @@ int transop_aes_init( n2n_trans_op_t * ttt )
             mbedtls_entropy_init( &sa->entropy );
             mbedtls_entropy_add_source( &sa->entropy, &mbedtls_platform_entropy_poll, NULL, 16, MBEDTLS_ENTROPY_SOURCE_STRONG );
             mbedtls_ctr_drbg_seed( &sa->random, &mbedtls_entropy_func, &sa->entropy, NULL, 0 );
+#elif USE_ELL
+            sa->cipher = NULL;
 #elif USE_BCRYPT
             BCryptOpenAlgorithmProvider ( &sa->hAlgorithm, BCRYPT_AES_ALGORITHM, NULL, 0 );
             BCryptSetProperty ( sa->hAlgorithm, BCRYPT_CHAINING_MODE,
