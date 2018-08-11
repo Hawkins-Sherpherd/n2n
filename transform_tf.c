@@ -3,6 +3,7 @@
 #include "n2n.h"
 #include "n2n_transforms.h"
 #include "twofish.h"
+#include "random.h"
 
 #define N2N_TWOFISH_NUM_SA              32 /* space for SAa */
 
@@ -14,6 +15,7 @@ struct sa_twofish
     n2n_sa_t            sa_id;  /* security association index */
     TWOFISH *           enc_tf; /* tx state */
     TWOFISH *           dec_tf; /* rx state */
+    struct random_ctx   random;
 };
 
 typedef struct sa_twofish sa_twofish_t;
@@ -54,6 +56,8 @@ static int transop_deinit_twofish( n2n_trans_op_t * arg )
             sa->dec_tf=NULL;
 
             sa->sa_id=0;
+
+            random_free(&sa->random);
         }
     
         priv->num_sa=0;
@@ -121,7 +125,7 @@ static ssize_t transop_encode_twofish( n2n_trans_op_t * arg,
              * written in first followed by the packet payload. The whole
              * contents of assembly are encrypted. */
             pnonce = (uint32_t *)assembly;
-            *pnonce = rand();
+            random_bytes(&sa->random, (uint8_t*) pnonce, sizeof(uint32_t));
             memcpy( assembly + TRANSOP_TF_NONCE_SIZE, inbuf, in_len );
 
             /* Encrypt the assembly contents and write the ciphertext after the SA. */
@@ -469,6 +473,7 @@ int transop_twofish_init( n2n_trans_op_t * ttt )
             memset( &(sa->spec), 0, sizeof(n2n_cipherspec_t) );
             sa->enc_tf=NULL;
             sa->dec_tf=NULL;
+            random_init(&sa->random);
         }
 
         retval = 0;

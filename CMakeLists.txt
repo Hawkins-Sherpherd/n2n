@@ -2,7 +2,7 @@ project(n2n C)
 cmake_minimum_required(VERSION 3.7)
 
 # N2n information
-set(N2N_VERSION 2.2.0)
+set(N2N_VERSION 2.3.0)
 set(N2N_OSNAME ${CMAKE_SYSTEM_NAME})
 
 add_definitions(-DN2N_VERSION=\"${N2N_VERSION}\" -DN2N_OSNAME=\"${N2N_OSNAME}\")
@@ -14,6 +14,8 @@ endif(NOT DEFINED N2N_OPTION_AES)
 
 if(N2N_OPTION_AES)
 add_definitions(-DN2N_HAVE_AES)
+endif(N2N_OPTION_AES)
+
 if(USE_GCRYPT)
         add_definitions(-DUSE_GCRYPT=1)
         set(CRYPTO_LIB gcrypt)
@@ -33,7 +35,6 @@ elseif(DEFINED WIN32)
         add_definitions(-DUSE_BCRYPT=1)
         set(CRYPTO_LIB bcrypt)
 endif()
-endif(N2N_OPTION_AES)
 
 # Build information
 if(NOT DEFINED BUILD_SHARED_LIBS)
@@ -88,6 +89,8 @@ endif(DEFINED WIN32)
 
 add_executable(edge
         edge.c
+        random.c
+        aes.c
         twofish.c
         transform_null.c
         transform_tf.c

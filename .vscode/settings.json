@@ -1,6 +1,11 @@
 {
     "files.associations": {
         "*.h": "c",
-        "*.tcc": "c"
+        "*.tcc": "c",
+        "array": "c",
+        "hash_map": "c",
+        "initializer_list": "c",
+        "string_view": "c",
+        "utility": "c"
     }
 }
