@@ -35,11 +35,17 @@
 #error "Unknown Crypto Library"
 #endif
 
+#define AES256_KEY_BYTES (256/8)
+#define AES192_KEY_BYTES (192/8)
+#define AES128_KEY_BYTES (128/8)
+
+#define AES_BLOCK_SIZE 16
+
 typedef struct cipher_ctx {
 #if USE_OPENSSL
     EVP_CIPHER_CTX      *ctx;
     const EVP_CIPHER    *cipher;
-    uint8_t             key[32];
+    uint8_t             key[AES256_KEY_BYTES];
 #elif USE_NETTLE
     struct aes_ctx      enc_ctx;
     struct aes_ctx      dec_ctx;

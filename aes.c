@@ -2,12 +2,6 @@
 
 #include "aes.h"
 
-#define AES256_KEY_BYTES (256/8)
-#define AES192_KEY_BYTES (192/8)
-#define AES128_KEY_BYTES (128/8)
-
-#define AES_BLOCK_SIZE 16
-
 /* Return the best acceptable AES key size (in bytes) given an input keysize. 
  *
  * The value returned will be one of AES128_KEY_BYTES, AES192_KEY_BYTES or

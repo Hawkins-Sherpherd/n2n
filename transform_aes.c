@@ -24,7 +24,6 @@ struct sa_aes
     n2n_sa_t            sa_id;          /* security association index */
     n2n_aes_ivec_t      enc_ivec;       /* tx CBC state */
     n2n_aes_ivec_t      dec_ivec;       /* tx CBC state */
-    int                 block_size;     /* cipher block size */
     uint8_t             key[N2N_MAX_KEYSIZE]; /* keydata */
     struct cipher_ctx   cipher_ctx;
     struct random_ctx   random_ctx;
@@ -139,7 +138,7 @@ static ssize_t transop_encode_aes( n2n_trans_op_t * arg,
             memcpy( assembly + TRANSOP_AES_NONCE_SIZE, inbuf, in_len );
 
             /* Round up to next whole AES adding at least one byte. */
-            len2 = ( (len / sa->block_size) + 1 ) * sa->block_size;
+            len2 = ( (len / AES_BLOCK_SIZE) + 1 ) * AES_BLOCK_SIZE;
             assembly[ len2 - 1 ] = ((uint8_t) (len2 - (size_t) len));
             traceEvent( TRACE_DEBUG, "padding = %u", assembly[ len2-1 ] );
 
@@ -233,7 +232,7 @@ static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
 
                 len = (in_len - (TRANSOP_AES_VER_SIZE + TRANSOP_AES_SA_SIZE));
                 
-                if ( 0 == (len % sa->block_size) )
+                if ( 0 == (len % AES_BLOCK_SIZE) )
                 {
                     uint8_t padding;
                     
@@ -267,7 +266,7 @@ static ssize_t transop_decode_aes( n2n_trans_op_t * arg,
                 }
                 else
                 {
-                    traceEvent( TRACE_WARNING, "Encrypted length %d is not a multiple of AES_BLOCK_SIZE (%d)", len, sa->block_size );
+                    traceEvent( TRACE_WARNING, "Encrypted length %d is not a multiple of AES_BLOCK_SIZE (%d)", len, AES_BLOCK_SIZE );
                     len = 0;
                 }
 
