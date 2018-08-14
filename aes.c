@@ -127,11 +127,11 @@ uint8_t n2n_aes_set_key(cipher_ctx_t ctx, const uint8_t* key, uint8_t length) {
     ctx->cipher = l_cipher_new( L_CIPHER_AES_CBC, key, key_length );
 #elif USE_BCRYPT
     if (ctx->hKey != NULL)
-        BCryptDestroyKey ( sa->hKey );
+        BCryptDestroyKey ( ctx->hKey );
     uint32_t key_length = n2n_aes_best_keysize(length) * 8;
     BCryptSetProperty( ctx->hAlgorithm, BCRYPT_KEY_LENGTH, (uint8_t*) &key_length, sizeof(uint32_t), 0 );
     key_length /= 8;
-    BCryptGenerateSymmetricKey( ctx->hAlgorithm, &ctx->hKey, NULL, 0, ctx->key, key_length, 0 );
+    BCryptGenerateSymmetricKey( ctx->hAlgorithm, &ctx->hKey, NULL, 0, (uint8_t*) key, key_length, 0 );
 #endif
     return key_length;
 }
@@ -158,7 +158,7 @@ void n2n_aes_encrypt(cipher_ctx_t ctx, const uint8_t* iv, const uint8_t* in, uin
     l_cipher_encrypt( ctx->cipher, in, out, length );
 #elif USE_BCRYPT
     uint32_t res_length = length;
-    BCryptEncrypt( ctx->hKey, in, (uint32_t) lenght, NULL, iv, AES_BLOCK_SIZE, out, res_length, &res_length, 0 );
+    BCryptEncrypt( ctx->hKey, (uint8_t*) in, (uint32_t) length, NULL, (uint8_t*) iv, AES_BLOCK_SIZE, out, res_length, &res_length, 0 );
 #endif
 }
 
@@ -184,7 +184,7 @@ void n2n_aes_decrypt(cipher_ctx_t ctx, const uint8_t* iv, const uint8_t* in, uin
     l_cipher_decrypt( ctx->cipher, in, out, length );
 #elif USE_BCRYPT
     uint32_t res_length = length;
-    BCryptDecrypt( ctx->hKey, in, (uint32_t) length, NULL, iv, AES_BLOCK_SIZE,out, res_length, &res_length, 0 );
+    BCryptDecrypt( ctx->hKey, (uint8_t*) in, (uint32_t) length, NULL, (uint8_t*) iv, AES_BLOCK_SIZE,out, res_length, &res_length, 0 );
 #endif
 }
 

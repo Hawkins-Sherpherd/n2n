@@ -43,7 +43,7 @@ void random_free(random_ctx_t ctx) {
     mbedtls_ctr_drbg_free(&ctx->random);
     mbedtls_entropy_free(&ctx->entropy);
 #elif USE_BCRYPT
-    BBCryptCloseAlgorithmProvider( ctx->hRandom, 0 );
+    BCryptCloseAlgorithmProvider( ctx->hRandom, 0 );
 #elif __unix__
     close(ctx->fd);
 #endif
