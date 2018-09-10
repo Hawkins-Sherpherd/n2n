@@ -89,7 +89,6 @@ endif(DEFINED WIN32)
 
 add_executable(edge
         edge.c
-        random.c
         aes.c
         twofish.c
         transform_null.c
