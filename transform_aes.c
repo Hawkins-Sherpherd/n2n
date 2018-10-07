@@ -329,7 +329,7 @@ static int transop_addspec_aes( n2n_trans_op_t * arg, const n2n_cipherspec_t * c
                 memset( &(sa->enc_ivec), 0, N2N_AES_IVEC_SIZE );
                 memset( &(sa->dec_ivec), 0, N2N_AES_IVEC_SIZE );
 
-                uint8_t key_length = n2n_aes_set_key( &sa->cipher_ctx, sa->key, pstat );
+                uint8_t key_length = n2n_aes_set_key( &sa->cipher_ctx, sa->key, (size_t) pstat );
                 
                 traceEvent( TRACE_DEBUG, "transop_addspec_aes sa_id=%u, %u bits data=%s.\n",
                             priv->sa[priv->num_sa].sa_id, key_length, sep+1);

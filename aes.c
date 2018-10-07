@@ -94,7 +94,7 @@ void n2n_aes_free(cipher_ctx_t ctx) {
 #endif
 }
 
-uint8_t n2n_aes_set_key(cipher_ctx_t ctx, const uint8_t* key, uint8_t length) {
+uint8_t n2n_aes_set_key(cipher_ctx_t ctx, const uint8_t* key, size_t length) {
 #if USE_OPENSSL
     ctx->cipher = n2n_aes_best_keysize(length);
     unsigned int key_length = EVP_CIPHER_key_length(ctx->cipher);

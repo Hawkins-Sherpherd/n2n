@@ -66,7 +66,7 @@ void n2n_aes_init(cipher_ctx_t ctx);
 
 void n2n_aes_free(cipher_ctx_t ctx);
 
-uint8_t n2n_aes_set_key(cipher_ctx_t ctx, const uint8_t* key, uint8_t length);
+uint8_t n2n_aes_set_key(cipher_ctx_t ctx, const uint8_t* key, size_t length);
 
 void n2n_aes_encrypt(cipher_ctx_t ctx, const uint8_t* iv, const uint8_t* in, uint8_t* out, size_t length);
 
