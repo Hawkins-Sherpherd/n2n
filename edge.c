@@ -2468,8 +2468,9 @@ int main(int argc, char* argv[])
         traceEvent( TRACE_NORMAL, "supernode %u => %s\n", i, (eee.sn_ip_array[i]) );
     }
 
-    if (supernode2addr( &(eee.supernode), eee.sn_af, eee.sn_ip_array[eee.sn_idx] ) != 0) {
-        exit(1);
+    while (supernode2addr( &(eee.supernode), eee.sn_af, eee.sn_ip_array[eee.sn_idx] ) != 0) {
+        // could not resolve IP, sleep and try again
+        sleep(5);
     }
 
     if(!(
