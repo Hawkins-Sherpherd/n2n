@@ -370,7 +370,7 @@ static int process_mgmt( n2n_sn_t * sss,
                          "----------------\n" );
 
     ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
-                         "uptime    %lu\n", (long) (now - sss->start_time) );
+                         "uptime    %ld\n", (long) (now - sss->start_time) );
 
     ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
                          "edges     %u\n", 
@@ -406,7 +406,7 @@ static int process_mgmt( n2n_sn_t * sss,
 
 
     r = sendto( sss->mgmt_sock, resbuf, ressize, 0/*flags*/, 
-                (struct sockaddr *)sender_sock, sizeof(struct sockaddr_in) );
+                (const struct sockaddr *)sender_sock, sizeof(struct sockaddr_in) );
 
     if ( r <= 0 )
     {

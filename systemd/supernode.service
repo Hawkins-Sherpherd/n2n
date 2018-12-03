@@ -1,0 +1,12 @@
+[Unit]
+Description=N2N network edge instance %i
+Documentation=man:edge(8)
+After=network.target
+
+[Service]
+DynamicUser=Yes
+ExecStart=/usr/local/bin/supernode -4 -f -l $PORT
+EnvironmentFile=/etc/n2n/supernode.conf
+
+[Install]
+WantedBy=multi-user.target
