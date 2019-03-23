@@ -2470,7 +2470,11 @@ int main(int argc, char* argv[])
 
     while (supernode2addr( &(eee.supernode), eee.sn_af, eee.sn_ip_array[eee.sn_idx] ) != 0) {
         // could not resolve IP, sleep and try again
+#ifdef _WIN32
+        Sleep(5000);
+#else
         sleep(5);
+#endif
     }
 
     if(!(
