@@ -279,6 +279,7 @@ static int transop_addspec_twofish( n2n_trans_op_t * arg, const n2n_cipherspec_t
     {
         const char * op = (const char *)cspec->opaque;
         const char * sep = strchr( op, '_' );
+        sa_twofish_t * sa=NULL;
 
         if ( sep )
         {
@@ -290,18 +291,17 @@ static int transop_addspec_twofish( n2n_trans_op_t * arg, const n2n_cipherspec_t
             tmp[s]=0;
             
             s = strlen(sep+1); /* sep is the _ which might be immediately followed by NULL */
-
-            priv->sa[priv->num_sa].spec = *cspec;
-            priv->sa[priv->num_sa].sa_id = strtoul(tmp, NULL, 10);
+            sa = &priv->sa[priv->num_sa];
+            sa->spec = *cspec;
+            sa->sa_id = strtoul(tmp, NULL, 10);
 
             pstat = n2n_parse_hex( keybuf, N2N_MAX_KEYSIZE, sep+1, s );
             if ( pstat > 0 )
             {
-                priv->sa[priv->num_sa].enc_tf = TwoFishInit( keybuf, pstat);
-                priv->sa[priv->num_sa].dec_tf = TwoFishInit( keybuf, pstat);
+                sa->enc_tf = TwoFishInit( keybuf, pstat);
+                sa->dec_tf = TwoFishInit( keybuf, pstat);
                 
-                traceEvent( TRACE_DEBUG, "transop_addspec_twofish sa_id=%u data=%s.\n",
-                            priv->sa[priv->num_sa].sa_id, sep+1);
+                traceEvent( TRACE_DEBUG, "transop_addspec_twofish sa_id=%u data=%s.\n", sa->sa_id, sep+1);
                 
                 ++(priv->num_sa);
                 retval = 0;
@@ -404,6 +404,8 @@ int transop_twofish_setup( n2n_trans_op_t * ttt,
         sa = &(priv->sa[priv->tx_sa]);
         sa->sa_id=sa_num;
         sa->spec.valid_until = 0x7fffffff;
+        
+        random_init(&sa->random);
 
         /* This is a preshared key setup. Both Tx and Rx are using the same security association. */
 
