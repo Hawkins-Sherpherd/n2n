@@ -47,8 +47,10 @@ typedef struct cipher_ctx {
     const EVP_CIPHER    *cipher;
     uint8_t             key[AES256_KEY_BYTES];
 #elif USE_NETTLE
-    struct aes_ctx      enc_ctx;
-    struct aes_ctx      dec_ctx;
+    struct aes256_ctx   enc_ctx;
+    struct aes256_ctx   dec_ctx;
+    nettle_cipher_func* enc_fun;
+    nettle_cipher_func* dec_fun;
 #elif USE_GCRYPT
     gcry_cipher_hd_t    cipher;
 #elif USE_MBEDTLS

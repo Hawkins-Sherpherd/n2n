@@ -101,8 +101,28 @@ uint8_t n2n_aes_set_key(cipher_ctx_t ctx, const uint8_t* key, size_t length) {
     memcpy(ctx->key, key, key_length);
 #elif USE_NETTLE
     uint32_t key_length = n2n_aes_best_keysize(length);
-    aes_set_encrypt_key( &ctx->enc_ctx, key_length, key );
-    aes_set_decrypt_key( &ctx->dec_ctx, key_length, key );
+    switch (key_length) {
+    case 32:
+        aes256_set_encrypt_key((struct aes256_ctx*) &ctx->enc_ctx, key);
+        aes256_set_decrypt_key((struct aes256_ctx*) &ctx->dec_ctx, key);
+        ctx->enc_fun = (nettle_cipher_func*) aes256_encrypt;
+        ctx->dec_fun = (nettle_cipher_func*) aes256_decrypt;
+        break;
+    case 24:
+        aes192_set_encrypt_key((struct aes192_ctx*) &ctx->enc_ctx, key);
+        aes192_set_decrypt_key((struct aes192_ctx*) &ctx->dec_ctx, key);
+        ctx->enc_fun = (nettle_cipher_func*) aes192_encrypt;
+        ctx->dec_fun = (nettle_cipher_func*) aes192_decrypt;
+        break;
+    case 16:
+        aes128_set_encrypt_key((struct aes128_ctx*)  &ctx->enc_ctx, key);
+        aes128_set_decrypt_key((struct aes128_ctx*) &ctx->dec_ctx, key);
+        ctx->enc_fun = (nettle_cipher_func*) aes128_encrypt;
+        ctx->dec_fun = (nettle_cipher_func*) aes128_decrypt;
+        break;
+    default:
+        break;
+    }
 #elif USE_GCRYPT
     if (ctx->cipher)
         gcry_cipher_close( ctx->cipher );
@@ -145,7 +165,7 @@ void n2n_aes_encrypt(cipher_ctx_t ctx, const uint8_t* iv, const uint8_t* in, uin
     EVP_EncryptUpdate( ctx->ctx, out, &res_length, in, length );
     EVP_EncryptFinal( ctx->ctx, out + res_length, &res_length );
 #elif USE_NETTLE
-    cbc_encrypt( &ctx->enc_ctx, (nettle_cipher_func*) &aes_encrypt, AES_BLOCK_SIZE, (uint8_t*) iv, length, out, in );
+    cbc_encrypt(&ctx->enc_ctx, (nettle_cipher_func*) ctx->enc_fun, AES_BLOCK_SIZE, (uint8_t*) iv, length, out, in);
 #elif USE_GCRYPT
     gcry_cipher_reset( ctx->cipher );
     gcry_cipher_setiv( ctx->cipher, iv, AES_BLOCK_SIZE );
@@ -171,7 +191,7 @@ void n2n_aes_decrypt(cipher_ctx_t ctx, const uint8_t* iv, const uint8_t* in, uin
     EVP_DecryptUpdate( ctx->ctx, out, &res_length, in, length );
     EVP_DecryptFinal( ctx->ctx, out + res_length, &res_length );
 #elif USE_NETTLE
-    cbc_decrypt( &ctx->dec_ctx, (nettle_cipher_func*) &aes_decrypt, AES_BLOCK_SIZE, (uint8_t*) iv, length, out, in );
+    cbc_decrypt(&ctx->dec_ctx, (nettle_cipher_func*) ctx->dec_fun, AES_BLOCK_SIZE, (uint8_t*) iv, length, out, in);
 #elif USE_GCRYPT
     gcry_cipher_reset( ctx->cipher );
     gcry_cipher_setiv( ctx->cipher, iv, AES_BLOCK_SIZE );
