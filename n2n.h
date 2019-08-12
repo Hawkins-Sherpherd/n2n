@@ -98,6 +98,8 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/un.h>
+#include <sys/stat.h>
 
 #define closesocket(a) close(a)
 #endif /* #ifndef _WIN32 */

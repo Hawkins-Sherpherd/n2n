@@ -23,11 +23,6 @@
 
 #include "n2n.h"
 
-#ifndef _WIN32
-#include <sys/un.h>
-#include <sys/stat.h>
-#endif
-
 #include "minilzo.h"
 
 #include <assert.h>
@@ -420,8 +415,7 @@ size_t clear_peer_list( struct peer_info ** peer_list )
     return retval;
 }
 
-char * sock_to_cstr( n2n_sock_str_t out,
-                            const n2n_sock_t * sock )
+char * sock_to_cstr( n2n_sock_str_t out, const n2n_sock_t * sock )
 {
     ipstr_t buffer;
 

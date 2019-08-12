@@ -1507,16 +1507,31 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
     uint8_t             buf[N2N_PKT_BUF_SIZE];      /* Compete UDP packet */
     ssize_t             recvlen;
     _unused_ ssize_t    sendlen;
-    struct sockaddr     sender_sock;
+#ifdef _WIN32
+    struct sockaddr_storage sender_sock;
+#else
+    struct sockaddr_un sender_sock;
+#endif
     socklen_t           i;
     size_t              msg_len;
     time_t              now;
+    char                addr_buffer[108];
 
     now = time(NULL);
     i = sizeof(sender_sock);
     recvlen=recvfrom( eee->mgmt_sock, buf, N2N_PKT_BUF_SIZE, 0/*flags*/,
-                      &sender_sock, (socklen_t*) &i);
-
+                      (struct sockaddr*) &sender_sock, &i);
+    if (i > 0) {
+#ifndef _WIN32
+        if (((struct sockaddr*) &sender_sock)->sa_family == AF_UNIX) {
+            traceEvent( TRACE_INFO, "mgmt pkg from %s", ((struct sockaddr_un*) &sender_sock)->sun_path );
+        } else {
+#endif
+            traceEvent( TRACE_INFO, "mgmt pkg from %s", sock_to_cstr(addr_buffer, (n2n_sock_t*) &sender_sock));
+#ifndef _WIN32
+        }
+#endif
+    }
     if ( recvlen < 0 )
     {
 #ifdef _WIN32
@@ -1554,7 +1569,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
                                  "  <enter> Display statistics\n\n");
 
             sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
-                    &sender_sock, sizeof(struct sockaddr) );
+                    (struct sockaddr*) &sender_sock, i );
 
             return;
         }
@@ -1583,7 +1598,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
                 peer = peer->next;
             }
             sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
-                    &sender_sock, sizeof(struct sockaddr) );
+                    (struct sockaddr*) &sender_sock, i );
             return;
         }
 
@@ -1601,7 +1616,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
                                      "> +OK traceLevel=%d\n", traceLevel );
 
             sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
-                    &sender_sock, sizeof(struct sockaddr) );
+                    (struct sockaddr*) &sender_sock, i );
 
             return;
         }
@@ -1625,7 +1640,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
             traceEvent( TRACE_ERROR, "-verb traceLevel=%d", traceLevel );
 
             sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
-                    &sender_sock, sizeof(struct sockaddr) );
+                    (struct sockaddr*) &sender_sock, i );
             return;
         }
     }
@@ -1642,7 +1657,7 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
                     msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                                          "> OK\n" );
                     sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
-                            &sender_sock, sizeof(struct sockaddr) );
+                            (struct sockaddr*) &sender_sock, i );
                 }
                 return;
             }
@@ -1690,8 +1705,10 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 
 
     sendlen = sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
-                      &sender_sock, sizeof(struct sockaddr) );
+                      (struct sockaddr*) &sender_sock, i );
 
+    if (sendlen != msg_len)
+        traceEvent(TRACE_DEBUG, "mgmt status sending: %ld: %s", sendlen, strerror(errno) );
 }
 
 
@@ -2079,7 +2096,7 @@ static int scan_address( char * ip_addr, size_t addr_size,
             memset(ip_mode, 0, mode_size);
             end = min( p - s, (ssize_t)(mode_size - 1) ); /* ensure NULL term */
             strncpy( ip_mode, s, end );
-            end = min( addr_end - end, addr_size - 1);
+            end = min( addr_end - end - 1, addr_size - 1);
             strncpy( ip_addr, p + 1, end ); /* ensure NULL term */
             retval = 0;
         }
@@ -2277,7 +2294,7 @@ int main(int argc, char* argv[])
     optarg = NULL;
     while((opt = getopt_long(argc,
         argv,
-        "46K:k:a:A:bc:Eu:g:m:M:s:d:l:p:fvhrt:", long_options, NULL
+        "46K:k:a:A:bc:Eu:g:m:M:d:l:p:fvhrt:", long_options, NULL
     )) != EOF) {
         switch (opt) {
         case '4':
@@ -2601,7 +2618,7 @@ int main(int argc, char* argv[])
 #if !defined(_WIN32)
     if (mgmt_port == 0)
     {
-        eee.mgmt_sock = open_socket_unix(mgmt_path, 660);
+        eee.mgmt_sock = open_socket_unix(mgmt_path, 0660);
         if(eee.mgmt_sock == -1)
         {
             traceEvent( TRACE_ERROR, "Failed to bind management socket %s", mgmt_path);
