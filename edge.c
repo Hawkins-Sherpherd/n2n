@@ -26,7 +26,6 @@
 #include "n2n.h"
 #include "n2n_transforms.h"
 #include <assert.h>
-#include <sys/stat.h>
 #include "minilzo.h"
 
 #ifdef N2N_HAVE_AES
@@ -117,7 +116,7 @@ struct n2n_edge
     int                 null_transop;           /**< Only allowed if no key sources defined. */
 
     SOCKET              udp_sock;
-    SOCKET              udp_mgmt_sock;          /**< socket for status info. */
+    SOCKET              mgmt_sock;          /**< socket for status info. */
 
     tuntap_dev          device;                 /**< All about the TUNTAP device */
     int                 dyn_ip_mode;            /**< Interface IP address is dynamically allocated, eg. DHCP. */
@@ -317,7 +316,7 @@ static int edge_init(n2n_edge_t * eee)
     /* community_name set to NULLs by memset */
     eee->null_transop   = 0;
     eee->udp_sock       = -1;
-    eee->udp_mgmt_sock  = -1;
+    eee->mgmt_sock  = -1;
     eee->dyn_ip_mode    = 0;
     eee->allow_routing  = 0;
     eee->drop_multicast = 1;
@@ -477,9 +476,9 @@ static void edge_deinit(n2n_edge_t * eee)
         closesocket( eee->udp_sock );
     }
 
-    if ( eee->udp_mgmt_sock != -1 )
+    if ( eee->mgmt_sock != -1 )
     {
-        closesocket(eee->udp_mgmt_sock);
+        closesocket(eee->mgmt_sock);
     }
 
     clear_peer_list( &(eee->pending_peers) );
@@ -526,7 +525,7 @@ void print_n2n_version() {
     );
 #endif // N2N_HAVE_AES
     printf("Copyright 2007-09 - http://www.ntop.org\n"
-           "Copyright 2018 - https://github.org/mxre/n2n\n\n");
+           "Copyright 2018-19 - https://github.org/mxre/n2n\n\n");
          
 }
 
@@ -534,15 +533,14 @@ static void help() {
     print_n2n_version();
 
     printf("edge "
-#if N2N_CAN_NAME_IFACE && !_WIN32
+#if N2N_CAN_NAME_IFACE && !defined(_WIN32)
         "-d <tun device> "
-#elif N2N_CAN_NAME_IFACE && _WIN32
+#elif N2N_CAN_NAME_IFACE && defined(_WIN32)
         "[-d <tun device>] "
 #endif /* #if N2N_CAN_NAME_IFACE */
-        "-a [static:|dhcp:]<tun IP address> "
+        "-a [static:|dhcp:]<tun IP address>/<prefixlen> "
         "-c <community> "
         "[-k <encrypt key> | -K <key file>] "
-        "[-s <netmask>] "
 #if defined(N2N_HAVE_SETUID)
         "[-u <uid> -g <gid>]"
 #endif /* #ifdef N2N_HAVE_SETUID */
@@ -564,12 +562,11 @@ static void help() {
 #ifdef N2N_CAN_NAME_IFACE
     printf("-d <tun device>          | tun device name\n");
 #endif
-    printf("-a <mode:address>        | Set interface IPv4 address. For DHCP use '-r -a dhcp:0.0.0.0'\n");
+    printf("-a <mode:IPv4/prefixlen> | Set interface IPv4 address. For DHCP use '-r -a dhcp:0.0.0.0/0'\n");
     printf("-A <IPv6>/<prefixlen>    | Set interface IPv6 address, only supported if IPv4 set to 'static'\n");
     printf("-c <community>           | n2n community name the edge belongs to.\n");
     printf("-k <encrypt key>         | Encryption key (ASCII) - also N2N_KEY=<encrypt key>. Not with -K.\n");
     printf("-K <key file>            | Specify a key schedule file to load. Not with -k.\n");
-    printf("-s <netmask>             | Edge interface netmask in dotted decimal notation (255.255.255.0).\n");
     printf("-l <supernode host:port> | Supernode IP:port\n");
     printf("[-4|-6]                  | Resolve supernode DNS name as IPv4 or IPv6 (default is unspecified)\n");
     printf("-b                       | Periodically resolve supernode IP\n");
@@ -590,7 +587,7 @@ static void help() {
     printf("-r                       | Enable packet forwarding through n2n community.\n");
     printf("-E                       | Accept multicast MAC addresses (default=drop).\n");
     printf("-v                       | Make more verbose. Repeat as required.\n");
-    printf("-t                       | Management UDP Port (for multiple edges on a machine).\n");
+    printf("-t                       | Management Socket (UDP Port or absolute path). (default %d)\n", N2N_EDGE_MGMT_PORT);
 
     printf("\nEnvironment variables:\n");
     printf("  N2N_KEY                | Encryption key (ASCII). Not with -K or -k.\n" );
@@ -1507,18 +1504,18 @@ static int handle_PACKET( n2n_edge_t * eee,
  *  action. */
 static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 {
-    uint8_t             udp_buf[N2N_PKT_BUF_SIZE];      /* Compete UDP packet */
+    uint8_t             buf[N2N_PKT_BUF_SIZE];      /* Compete UDP packet */
     ssize_t             recvlen;
     _unused_ ssize_t    sendlen;
-    struct sockaddr_in  sender_sock;
+    struct sockaddr     sender_sock;
     socklen_t           i;
     size_t              msg_len;
     time_t              now;
 
     now = time(NULL);
     i = sizeof(sender_sock);
-    recvlen=recvfrom(eee->udp_mgmt_sock, udp_buf, N2N_PKT_BUF_SIZE, 0/*flags*/,
-             (struct sockaddr *)&sender_sock, (socklen_t*)&i);
+    recvlen=recvfrom( eee->mgmt_sock, buf, N2N_PKT_BUF_SIZE, 0/*flags*/,
+                      &sender_sock, (socklen_t*) &i);
 
     if ( recvlen < 0 )
     {
@@ -1535,18 +1532,18 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 
     if ( recvlen >= 4 )
     {
-        if ( 0 == memcmp( udp_buf, "stop", 4 ) )
+        if ( 0 == memcmp( buf, "stop", 4 ) )
         {
             traceEvent( TRACE_ERROR, "stop command received." );
             *keep_running = 0;
             return;
         }
 
-        if ( 0 == memcmp( udp_buf, "help", 4 ) )
+        if ( 0 == memcmp( buf, "help", 4 ) )
         {
             msg_len=0;
 
-            msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+            msg_len += snprintf( (char*)(buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                                  "Help for edge management console:\n"
                                  "  stop    Gracefully exit edge\n"
                                  "  help    This help message\n"
@@ -1556,13 +1553,13 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
                                  "  reload  Re-read the keyschedule\n"
                                  "  <enter> Display statistics\n\n");
 
-            sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
-                    (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
+            sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
+                    &sender_sock, sizeof(struct sockaddr) );
 
             return;
         }
 
-        if ( 0 == memcmp (udp_buf, "list", 4 ) )
+        if ( 0 == memcmp (buf, "list", 4 ) )
         {
             msg_len=0;
     
@@ -1571,22 +1568,22 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
             struct peer_info* peer = eee->pending_peers;
             while(peer) {
                 sock_to_cstr(sockaddr, &peer->sock);
-                msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+                msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                     "%s %s\n", macaddr_str(mac, peer->mac_addr), sockaddr
                 );
                 peer = peer->next;
             }
-            msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len), "-\n");
+            msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len), "-\n");
             peer = eee->known_peers;
             while(peer) {
                 sock_to_cstr(sockaddr, &peer->sock);                
-                msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+                msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                     "%s %s\n", macaddr_str(mac, peer->mac_addr), sockaddr
                 );
                 peer = peer->next;
             }
-            sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
-                    (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
+            sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
+                    &sender_sock, sizeof(struct sockaddr) );
             return;
         }
 
@@ -1594,58 +1591,58 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
 
     if ( recvlen >= 5 )
     {
-        if ( 0 == memcmp( udp_buf, "+verb", 5 ) )
+        if ( 0 == memcmp( buf, "+verb", 5 ) )
         {
             msg_len=0;
             ++traceLevel;
 
-            traceEvent( TRACE_ERROR, "+verb traceLevel=%u", (unsigned int)traceLevel );
-            msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
-                                     "> +OK traceLevel=%u\n", (unsigned int)traceLevel );
+            traceEvent( TRACE_ERROR, "+verb traceLevel=%d", traceLevel );
+            msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
+                                     "> +OK traceLevel=%d\n", traceLevel );
 
-            sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
-                    (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
+            sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
+                    &sender_sock, sizeof(struct sockaddr) );
 
             return;
         }
 
-        if ( 0 == memcmp( udp_buf, "-verb", 5 ) )
+        if ( 0 == memcmp( buf, "-verb", 5 ) )
         {
             msg_len=0;
 
             if ( traceLevel > 0 )
             {
                 --traceLevel;
-                msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
-                                     "> -OK traceLevel=%u\n", traceLevel );
+                msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
+                                     "> -OK traceLevel=%d\n", traceLevel );
             }
             else
             {
-                msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
-                                     "> -NOK traceLevel=%u\n", traceLevel );
+                msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
+                                     "> -NOK traceLevel=%d\n", traceLevel );
             }
 
-            traceEvent( TRACE_ERROR, "-verb traceLevel=%u", (unsigned int)traceLevel );
+            traceEvent( TRACE_ERROR, "-verb traceLevel=%d", traceLevel );
 
-            sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
-                    (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
+            sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
+                    &sender_sock, sizeof(struct sockaddr) );
             return;
         }
     }
 
     if ( recvlen >= 6 )
     {
-        if ( 0 == memcmp( udp_buf, "reload", 6 ) )
+        if ( 0 == memcmp( buf, "reload", 6 ) )
         {
             if ( strlen( eee->keyschedule ) > 0 )
             {
                 if ( edge_init_keyschedule(eee) == 0 )
                 {
                     msg_len=0;
-                    msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+                    msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                                          "> OK\n" );
-                    sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
-                            (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
+                    sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
+                            &sender_sock, sizeof(struct sockaddr) );
                 }
                 return;
             }
@@ -1655,21 +1652,21 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
     traceEvent(TRACE_DEBUG, "mgmt status rq" );
 
     msg_len=0;
-    msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+    msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                          "Statistics for edge\n" );
 
-    msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
-                         "uptime %lu\n",
+    msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
+                         "uptime %ld\n",
                          time(NULL) - eee->start_time );
 
-    msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+    msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                          "paths  super:%u,%u p2p:%u,%u\n",
-                         (unsigned int)eee->tx_sup,
+                         (unsigned int) eee->tx_sup,
              (unsigned int)eee->rx_sup,
              (unsigned int)eee->tx_p2p,
              (unsigned int)eee->rx_p2p );
 
-    msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+    msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                          "trans:null |%6u|%6u|\n"
                          "trans:tf   |%6u|%6u|\n"
                          "trans:aes  |%6u|%6u|\n",
@@ -1680,20 +1677,20 @@ static void readFromMgmtSocket( n2n_edge_t * eee, int * keep_running )
                          (unsigned int)eee->transop[N2N_TRANSOP_AESCBC_IDX].tx_cnt,
                          (unsigned int)eee->transop[N2N_TRANSOP_AESCBC_IDX].rx_cnt );
 
-    msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
+    msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
                          "peers  pend:%u full:%u\n",
                          (unsigned int)peer_list_size( eee->pending_peers ), 
              (unsigned int)peer_list_size( eee->known_peers ) );
 
-    msg_len += snprintf( (char *)(udp_buf+msg_len), (N2N_PKT_BUF_SIZE-msg_len),
-                         "last   super:%lu(%ld sec ago) p2p:%lu(%ld sec ago)\n",
-                         eee->last_sup, (now-eee->last_sup), eee->last_p2p, (now-eee->last_p2p) );
+    msg_len += snprintf( (char*) (buf + msg_len), (N2N_PKT_BUF_SIZE - msg_len),
+                         "last   super:%ld(%ld sec ago) p2p:%ld(%ld sec ago)\n",
+                         eee->last_sup, (now - eee->last_sup), eee->last_p2p, (now - eee->last_p2p) );
 
-    traceEvent(TRACE_DEBUG, "mgmt status sending: %s", udp_buf );
+    traceEvent(TRACE_DEBUG, "mgmt status sending: %s", buf );
 
 
-    sendlen = sendto( eee->udp_mgmt_sock, udp_buf, msg_len, 0/*flags*/,
-                      (struct sockaddr *)&sender_sock, sizeof(struct sockaddr_in) );
+    sendlen = sendto( eee->mgmt_sock, buf, msg_len, 0/*flags*/,
+                      &sender_sock, sizeof(struct sockaddr) );
 
 }
 
@@ -1755,7 +1752,7 @@ static void readFromIPSocket( n2n_edge_t * eee )
     orig_sender=&sender;
 
     traceEvent(TRACE_INFO, "### Rx N2N UDP (%d) from %s", 
-               (signed int)recvlen, sock_to_cstr(sockbuf1, &sender) );
+               (signed int) recvlen, sock_to_cstr(sockbuf1, &sender) );
 
     /* hexdump( udp_buf, recvlen ); */
 
@@ -1790,7 +1787,7 @@ static void readFromIPSocket( n2n_edge_t * eee )
                        sock_to_cstr(sockbuf1, &sender),
                        sock_to_cstr(sockbuf2, orig_sender) );
 
-            handle_PACKET( eee, &cmn, &pkt, orig_sender, udp_buf+idx, recvlen-idx );
+            handle_PACKET( eee, &cmn, &pkt, orig_sender, udp_buf + idx, recvlen - idx );
         }
         else if(msg_type == MSG_TYPE_REGISTER)
         {
@@ -2144,6 +2141,7 @@ int main(int argc, char* argv[])
     int     opt;
     int     local_port = 0 /* any port */;
     int     mgmt_port = N2N_EDGE_MGMT_PORT; /* 5644 by default */
+    char    mgmt_path[108];
     char    tuntap_dev_name[N2N_IFNAMSIZ] = "edge0";
     char    ip_mode[N2N_IF_MODE_SIZE]="static";
     ipstr_t ip_addr = "";
@@ -2397,7 +2395,11 @@ int main(int argc, char* argv[])
         
         case 't':
         {
-            mgmt_port = atoi(optarg);
+            if (optarg[0] == '/') {
+                mgmt_port = 0;
+                strncpy(mgmt_path, optarg, sizeof(mgmt_path));
+            } else
+                mgmt_port = atoi(optarg);
             break;
         }
 
@@ -2478,7 +2480,7 @@ int main(int argc, char* argv[])
     }
 
     if(!(
-#if N2N_CAN_NAME_IFACE && !_WIN32
+#if N2N_CAN_NAME_IFACE && !defined(_WIN32)
         /* windows can use a default */
         (tuntap_dev_name[0] != 0) &&
 #endif
@@ -2597,14 +2599,28 @@ int main(int argc, char* argv[])
         return(-1);
     }
 
-    eee.udp_mgmt_sock = open_socket(mgmt_port, 0 /* bind LOOPBACK*/ );
-
-    if(eee.udp_mgmt_sock == -1)
+#if !defined(_WIN32)
+    if (mgmt_port == 0)
     {
-        traceEvent( TRACE_ERROR, "Failed to bind management UDP port %u", (unsigned int)N2N_EDGE_MGMT_PORT );
-        return(-1);
+        eee.mgmt_sock = open_socket_unix(mgmt_path, 660);
+        if(eee.mgmt_sock == -1)
+        {
+            traceEvent( TRACE_ERROR, "Failed to bind management socket %s", mgmt_path);
+            return(-1);
+        }
     }
-
+    else
+    {
+#endif
+        eee.mgmt_sock = open_socket(mgmt_port, 0 /* bind LOOPBACK*/ );
+        if(eee.mgmt_sock == -1)
+        {
+            traceEvent( TRACE_ERROR, "Failed to bind management socket %u", (unsigned int) mgmt_port);
+            return(-1);
+        }
+#if !defined(_WIN32)
+    }
+#endif
 
     traceEvent(TRACE_NORMAL, "edge started");
 
@@ -2641,8 +2657,8 @@ static int run_loop(n2n_edge_t * eee )
 
         FD_ZERO(&socket_mask);
         FD_SET(eee->udp_sock, &socket_mask);
-        FD_SET(eee->udp_mgmt_sock, &socket_mask);
-        max_sock = max((int) eee->udp_sock, (int) eee->udp_mgmt_sock );
+        FD_SET(eee->mgmt_sock, &socket_mask);
+        max_sock = max((int) eee->udp_sock, (int) eee->mgmt_sock );
 #ifndef _WIN32
         FD_SET(eee->device.fd, &socket_mask);
         max_sock = max( (int) max_sock, (int) eee->device.fd );
@@ -2672,10 +2688,8 @@ static int run_loop(n2n_edge_t * eee )
                 readFromIPSocket(eee);
             }
 
-            if(FD_ISSET(eee->udp_mgmt_sock, &socket_mask))
+            if(FD_ISSET(eee->mgmt_sock, &socket_mask))
             {
-                /* Read a cooked socket from the internet socket. Writes on the TAP
-                 * socket. */
                 readFromMgmtSocket(eee, &keep_running);
             }
 

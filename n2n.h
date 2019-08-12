@@ -251,6 +251,9 @@ extern void tuntap_get_address(struct tuntap_dev *tuntap);
 
 extern SOCKET open_socket(uint16_t local_port, int bind_any);
 extern SOCKET open_socket6(uint16_t local_port, int bind_any);
+#ifndef _WIN32
+extern SOCKET open_socket_unix(const char* path, mode_t access);
+#endif // _WIN32
 
 extern char* macaddr_str(macstr_t buf, const n2n_mac_t mac);
 extern char * sock_to_cstr( n2n_sock_str_t out,

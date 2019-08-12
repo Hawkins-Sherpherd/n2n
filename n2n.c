@@ -23,6 +23,11 @@
 
 #include "n2n.h"
 
+#ifndef _WIN32
+#include <sys/un.h>
+#include <sys/stat.h>
+#endif
+
 #include "minilzo.h"
 
 #include <assert.h>
@@ -101,6 +106,47 @@ SOCKET open_socket6(uint16_t local_port, int bind_any) {
     return sock_fd;
 }
 
+#ifndef _WIN32
+SOCKET open_socket_unix(const char* path, mode_t access) {
+    SOCKET sock_fd;
+    struct sockaddr_un socket_address;
+    struct stat stat_buf;
+
+    if (stat(path, &stat_buf) == 0) {
+        traceEvent(TRACE_WARNING, "socket exists %s ... deleting\n", path);
+        unlink(path);
+    } else {
+        if (errno != ENOENT) {
+            traceEvent(TRACE_WARNING, "could not stat socket [%s]\n", strerror(errno));
+            return -1;
+        }
+    }
+
+    if((sock_fd = socket(PF_UNIX, SOCK_DGRAM, 0)) < 0) {
+        traceEvent(TRACE_ERROR, "Unable to create socket [%s][%d]\n", strerror(errno), sock_fd);
+        return -1;
+    }
+
+    fcntl(sock_fd, F_SETFL, O_NONBLOCK);
+
+    memset(&socket_address, 0, sizeof(socket_address));
+    socket_address.sun_family = AF_UNIX;
+    strncpy(socket_address.sun_path, path, 108);
+
+#if __linux__
+    fchmod(sock_fd, access);
+#endif
+
+    if(bind(sock_fd, (struct sockaddr*) &socket_address, sizeof(socket_address)) == -1) {
+        traceEvent(TRACE_ERROR, "Bind error [%s]\n", strerror(errno));
+        return -1;
+    }
+
+    chmod(path, access);
+
+    return sock_fd;
+}
+#endif // _WIN32
 
 int traceLevel = 2 /* NORMAL */;
 bool useSyslog = false, syslog_opened = false, useSystemd = false;

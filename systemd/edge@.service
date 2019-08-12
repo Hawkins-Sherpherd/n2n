@@ -6,8 +6,9 @@ After=network.target
 [Service]
 DynamicUser=Yes
 AmbientCapabilities=CAP_NET_ADMIN
-ExecStart=/usr/local/bin/edge -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS -s $NETMASK $PARAMETER
+ExecStart=/usr/local/bin/edge -t $RUNTIME_DIRECTORY/mgmt -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS -s $NETMASK $PARAMETER
 EnvironmentFile=/etc/n2n/%i.conf
+RuntimeDirectory=edge-%i
 
 [Install]
 WantedBy=multi-user.target
