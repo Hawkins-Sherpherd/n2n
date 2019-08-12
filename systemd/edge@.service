@@ -1,13 +1,14 @@
 [Unit]
 Description=N2N network edge instance %i
 Documentation=man:edge(8)
-After=network.target
+After=network.target network-online.target
 
 [Service]
 DynamicUser=Yes
 AmbientCapabilities=CAP_NET_ADMIN
-ExecStart=/usr/local/bin/edge -t $RUNTIME_DIRECTORY/mgmt -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS -s $NETMASK $PARAMETER
+ExecStart=/usr/local/bin/edge -t /run/edge-%i/mgmt -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS $PARAMETER
 EnvironmentFile=/etc/n2n/%i.conf
+ConfigurationDirectory=n2n
 RuntimeDirectory=edge-%i
 
 [Install]

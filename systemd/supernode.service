@@ -1,12 +1,13 @@
 [Unit]
-Description=N2N network edge instance %i
+Description=N2N network edge instance
 Documentation=man:edge(8)
 After=network.target
 
 [Service]
 DynamicUser=Yes
-ExecStart=/usr/local/bin/supernode -4 -f -l $PORT
+ExecStart=/usr/local/bin/supernode -t /run/supernode/mgmt -f -l $PORT $PARAMETER
 EnvironmentFile=/etc/n2n/supernode.conf
+RuntimeDirectory=supernode
 
 [Install]
 WantedBy=multi-user.target
