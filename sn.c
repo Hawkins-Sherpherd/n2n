@@ -717,6 +717,12 @@ int main( int argc, char * const argv[] )
     bool ipv4 = false, ipv6 = false;
     char mgmt_path[108] = "";
 
+#ifndef _WIN32
+    /* stdout is connected to journald, so don't print data/time */
+    if ( getenv( "JOURNAL_STREAM" ) )
+        useSystemd = true;
+#endif
+
 #if _WIN32
     SetConsoleOutputCP(65001);
 
