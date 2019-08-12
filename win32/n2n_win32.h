@@ -87,7 +87,8 @@ typedef struct tuntap_dev {
 	OVERLAPPED overlap_read, overlap_write;
 	bool         dyn_ip4;
 	uint8_t      mac_addr[6];
-	uint32_t     ip_addr, device_mask;
+	uint32_t     ip_addr;
+	uint8_t      ip_prefixlen;
 	struct in6_addr ip6_addr;
 	uint8_t      ip6_prefixlen;
 	uint32_t     mtu;

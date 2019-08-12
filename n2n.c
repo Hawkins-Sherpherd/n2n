@@ -420,7 +420,7 @@ size_t clear_peer_list( struct peer_info ** peer_list )
     return retval;
 }
 
-extern char * sock_to_cstr( n2n_sock_str_t out,
+char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock )
 {
     ipstr_t buffer;
@@ -440,6 +440,10 @@ extern char * sock_to_cstr( n2n_sock_str_t out,
         snprintf( out, N2N_SOCKBUF_SIZE, "%s:%hu", buffer, sock->port );
         return out;
     }
+}
+
+uint32_t ip4_prefixlen_to_netmask(uint8_t prefixlen) {
+    return prefixlen ? htonl(~((1 << (32 - prefixlen)) - 1)) : 0;
 }
 
 /* @return zero if the two sockets are equivalent. */

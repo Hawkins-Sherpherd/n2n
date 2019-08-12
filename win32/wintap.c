@@ -65,17 +65,6 @@ static uint32_t set_dhcp(struct tuntap_dev* device) {
     return rc;
 }
 
-static uint8_t netmask_to_prefixlen(uint32_t netmask) {
-    uint8_t prefixlen = 0;
-
-    while (netmask > 0) {
-            netmask = netmask >> 1;
-            prefixlen++;
-    }
-
-    return prefixlen;
-}
-
 static uint32_t set_static_ip_address(struct tuntap_dev* device) {
 #if 1
     uint32_t rc;
@@ -98,7 +87,7 @@ static uint32_t set_static_ip_address(struct tuntap_dev* device) {
     ip_row.Address.si_family = AF_INET;
     ip_row.Address.Ipv4.sin_family = AF_INET;
     memcpy(&ip_row.Address.Ipv4.sin_addr, &device->ip_addr, IPV4_SIZE);
-    ip_row.OnLinkPrefixLength = netmask_to_prefixlen(device->device_mask);
+    ip_row.OnLinkPrefixLength = device->ip_prefixlen;
     rc = CreateUnicastIpAddressEntry(&ip_row);
 
     if (rc != 0)
@@ -273,7 +262,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     }
 
     memcpy(&device->ip_addr, &config->ip_addr, sizeof(config->ip_addr));
-    memcpy(&device->device_mask, &config->netmask, sizeof(config->netmask));
+    device->ip_prefixlen = config->ip_prefixlen;
     memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
     device->ip6_prefixlen = config->ip6_prefixlen;
     device->mtu = config->mtu;

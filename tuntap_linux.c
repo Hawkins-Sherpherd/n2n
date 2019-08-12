@@ -219,7 +219,8 @@ int tuntap_open(tuntap_dev *device, struct tuntap_config* config) {
     strncpy(device->dev_name, config->if_name, MIN(IFNAMSIZ, N2N_IFNAMSIZ) );
 
     memcpy(&device->ip_addr, &config->ip_addr, sizeof(config->ip_addr));
-    memcpy(&device->device_mask, &config->netmask, sizeof(config->netmask));
+
+    device->device_mask = ip4_prefixlen_to_netmask(config->ip_prefixlen);
     memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
 
     device->ip6_prefixlen = config->ip6_prefixlen;

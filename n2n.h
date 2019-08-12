@@ -163,7 +163,7 @@ struct tuntap_config {
     /* ipv4 configuration */
     bool dyn_ip4;
     in_addr_t ip_addr;
-    in_addr_t netmask;
+    uint8_t ip_prefixlen;
     /* ipv6 configuration */
     struct in6_addr ip6_addr;
     uint8_t ip6_prefixlen;
@@ -258,6 +258,8 @@ extern SOCKET open_socket_unix(const char* path, mode_t access);
 extern char* macaddr_str(macstr_t buf, const n2n_mac_t mac);
 extern char * sock_to_cstr( n2n_sock_str_t out,
                             const n2n_sock_t * sock );
+
+extern uint32_t ip4_prefixlen_to_netmask(uint8_t prefixlen);
 
 extern int sock_equal( const n2n_sock_t * a, 
                        const n2n_sock_t * b );

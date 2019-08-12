@@ -2042,9 +2042,11 @@ static int supernode2addr(n2n_sock_t * sn, int af, const n2n_sn_name_t addrIn) {
  */
 static int scan_address( char * ip_addr, size_t addr_size,
                          char * ip_mode, size_t mode_size,
+                         int* prefixlen,
                          const char * s )
 {
     int retval = -1;
+    size_t addr_end = addr_size;
     char * p;
 
     if ( ( NULL == s ) || ( NULL == ip_addr) )
@@ -2053,6 +2055,17 @@ static int scan_address( char * ip_addr, size_t addr_size,
     }
 
     memset(ip_addr, 0, addr_size);
+
+    p = strpbrk(s, "/");
+    if ( p )
+    {
+        if (prefixlen)
+        {
+            // TODO error check 0 <= prefixlen <=32
+            *prefixlen = atoi(p+1);
+        }
+        addr_end = p - s;
+    }
 
     p = strpbrk(s, ":");
 
@@ -2064,16 +2077,17 @@ static int scan_address( char * ip_addr, size_t addr_size,
             size_t end=0;
 
             memset(ip_mode, 0, mode_size);
-            end = min( p-s, (ssize_t)(mode_size-1) ); /* ensure NULL term */
+            end = min( p - s, (ssize_t)(mode_size - 1) ); /* ensure NULL term */
             strncpy( ip_mode, s, end );
-            strncpy( ip_addr, p+1, addr_size-1 ); /* ensure NULL term */
+            end = min( addr_end - end, addr_size - 1);
+            strncpy( ip_addr, p + 1, end ); /* ensure NULL term */
             retval = 0;
         }
     }
     else
     {
         /* colon is not present */
-        strncpy( ip_addr, s, addr_size );
+        strncpy( ip_addr, s, addr_end - 1 );
     }
 
     return retval;
@@ -2093,7 +2107,7 @@ static int scan_address( char * ip_addr, size_t addr_size,
  * provided, the string is not changed.
  */
 static int scan_address6( char * ip6_addr, size_t addr_size,
-                          char * ip6_prefixlen, size_t prefix_size,
+                          int* ip6_prefixlen,
                           const char * s )
 {
     int retval = -1;
@@ -2114,10 +2128,10 @@ static int scan_address6( char * ip6_addr, size_t addr_size,
         {
             size_t end=0;
 
-            memset(ip6_prefixlen, 0, prefix_size);
-            end = min( p-s, (ssize_t)(addr_size-1) ); /* ensure NULL term */
+            // TODO error check 0 <= prefixlen <= 128
+            *ip6_prefixlen = atoi(p + 1);
+            end = min( p - s, (ssize_t)(addr_size - 1) );
             strncpy( ip6_addr, s, end );
-            strncpy( ip6_prefixlen, p+1, prefix_size-1 ); /* ensure NULL term */
             retval = 0;
         }
     }
@@ -2145,9 +2159,9 @@ int main(int argc, char* argv[])
     char    tuntap_dev_name[N2N_IFNAMSIZ] = "edge0";
     char    ip_mode[N2N_IF_MODE_SIZE]="static";
     ipstr_t ip_addr = "";
-    ipstr_t netmask = "255.255.255.0";
+    int ip_prefixlen = 24;
     ipstr_t ip6_addr = "";
-    char    ip6_prefixlen[] = "64   "; /* add some space to be safe */
+    int ip6_prefixlen = 64;
     int     mtu = DEFAULT_MTU;
     int     got_s = 0;
     struct tuntap_config tuntap_config;
@@ -2288,14 +2302,13 @@ int main(int argc, char* argv[])
         {
             scan_address(ip_addr, N2N_NETMASK_STR_SIZE,
                          ip_mode, N2N_IF_MODE_SIZE,
-                         optarg );
+                         &ip_prefixlen, optarg );
             break;
         }
         case 'A': /* IP address and mode of TUNTAP interface */
         {
             scan_address6(ip6_addr, INET6_ADDRSTRLEN,
-                          ip6_prefixlen, 3,
-                          optarg );
+                          &ip6_prefixlen, optarg );
             break;
         }
         case 'c': /* community as a string */
@@ -2400,16 +2413,6 @@ int main(int argc, char* argv[])
                 strncpy(mgmt_path, optarg, sizeof(mgmt_path));
             } else
                 mgmt_port = atoi(optarg);
-            break;
-        }
-
-        case 's': /* Subnet Mask */
-        {
-            if (0 != got_s) {
-                traceEvent(TRACE_WARNING, "Multiple subnet masks supplied.");
-            }
-            strncpy(netmask, optarg, N2N_NETMASK_STR_SIZE);
-            got_s = 1;
             break;
         }
 
@@ -2527,10 +2530,7 @@ int main(int argc, char* argv[])
     if (inet_pton(AF_INET, ip_addr, &tuntap_config.ip_addr) != 1) {
          traceEvent(TRACE_ERROR, "invalid ipv4 address: %s", ip_addr);
     }
-    if (inet_pton(AF_INET, netmask, &tuntap_config.netmask) != 1) {
-        traceEvent(TRACE_ERROR, "invalid ipv4 netmask: %s", netmask);
-        /* TODO: validate */
-    }
+    tuntap_config.ip_prefixlen = ip_prefixlen;
     
     if (ip6_addr[0] == '\0')
         tuntap_config.ip6_prefixlen = 0;
@@ -2538,8 +2538,7 @@ int main(int argc, char* argv[])
         if (inet_pton(AF_INET6, ip6_addr, &tuntap_config.ip6_addr) != 1) {
             traceEvent(TRACE_ERROR, "invalid ipv6 address: %s", ip6_addr);
         }
-        /* TODO: error check */
-        tuntap_config.ip6_prefixlen = (uint8_t) strtol(ip6_prefixlen, NULL, 10);
+        tuntap_config.ip6_prefixlen = ip6_prefixlen;
     }
 
 #if defined(N2N_HAS_CAPABILITIES)
