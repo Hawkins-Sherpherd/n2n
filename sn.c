@@ -355,7 +355,8 @@ static int try_broadcast( n2n_sn_t * sss,
 
 
 static int process_mgmt( n2n_sn_t * sss, 
-                         const struct sockaddr_in * sender_sock,
+                         const struct sockaddr * sender_sock,
+                         socklen_t sender_sock_len,
                          const uint8_t * mgmt_buf, 
                          size_t mgmt_size,
                          time_t now)
@@ -406,7 +407,7 @@ static int process_mgmt( n2n_sn_t * sss,
 
 
     r = sendto( sss->mgmt_sock, resbuf, ressize, 0/*flags*/, 
-                (const struct sockaddr *)sender_sock, sizeof(struct sockaddr_in) );
+                sender_sock, sender_sock_len );
 
     if ( r <= 0 )
     {
@@ -684,6 +685,9 @@ static void help(int argc, char * const argv[])
     fprintf( stderr, "-l <lport>\tSet UDP main listen port to <lport>\n" );
     fprintf( stderr, "-4        \tUse IPv4 network (default)\n" );
     fprintf( stderr, "-6        \tUse IPv6 network\n" );
+#ifndef _WIN32
+    fprintf( stderr, "-t        \tUse UNIX management socket\n" );
+#endif
 #if defined(N2N_HAVE_DAEMON)
     fprintf( stderr, "-f        \tRun in foreground.\n" );
 #endif /* #if defined(N2N_HAVE_DAEMON) */
@@ -711,6 +715,7 @@ int main( int argc, char * const argv[] )
 {
     n2n_sn_t sss;
     bool ipv4 = false, ipv6 = false;
+    char mgmt_path[108] = "";
 
 #if _WIN32
     SetConsoleOutputCP(65001);
@@ -731,12 +736,15 @@ int main( int argc, char * const argv[] )
     {
         int opt;
 
-        while((opt = getopt_long(argc, argv, "fl:46vh", long_options, NULL)) != -1) 
+        while((opt = getopt_long(argc, argv, "ft:l:46vh", long_options, NULL)) != -1) 
         {
             switch (opt) 
             {
             case 'l': /* local-port */
                 sss.lport = atoi(optarg);
+                break;
+            case 't':
+                strncpy(mgmt_path, optarg, 108);
                 break;
             case 'f': /* foreground */
                 sss.daemon = 0;
@@ -812,7 +820,17 @@ int main( int argc, char * const argv[] )
         }
     }
 
-    sss.mgmt_sock = open_socket(N2N_SN_MGMT_PORT, 0 /* bind LOOPBACK */ );
+#ifndef _WIN32
+    if (mgmt_path[0] == '\0') {
+#endif
+        sss.mgmt_sock = open_socket(N2N_SN_MGMT_PORT, 0 /* bind LOOPBACK */ );
+#ifndef _WIN32
+    }
+    else
+    {
+        sss.mgmt_sock = open_socket_unix(mgmt_path, 0660 );
+    }
+#endif // _WIN32
     if ( -1 == sss.mgmt_sock )
     {
 #ifdef _WIN32
@@ -824,9 +842,13 @@ int main( int argc, char * const argv[] )
 #endif
         exit(-2);
     }
-    else
+    else if (mgmt_path[0] == '\0')
     {
         traceEvent( TRACE_NORMAL, "supernode is listening on UDP %u (management)", N2N_SN_MGMT_PORT );
+    }
+    else
+    {
+        traceEvent( TRACE_NORMAL, "supernode is listening on datagram %s (management)", mgmt_path);
     }
 
     traceEvent(TRACE_NORMAL, "supernode started");
@@ -869,12 +891,12 @@ static int run_loop( n2n_sn_t * sss )
 
         if(rc > 0) 
         {
-            if (FD_ISSET(sss->sock, &socket_mask)) 
-            {
-                struct sockaddr_in  sender_sock;
-                socklen_t           i;
+            struct sockaddr_storage  sender_sock;
+            socklen_t i;
+            i = sizeof(sender_sock);
 
-                i = sizeof(sender_sock);
+            if (FD_ISSET(sss->sock, &socket_mask)) 
+            {               
                 bread = recvfrom( sss->sock, pktbuf, N2N_SN_PKTBUF_SIZE, 0/*flags*/,
 				  (struct sockaddr *)&sender_sock, (socklen_t*)&i);
 
@@ -903,10 +925,6 @@ static int run_loop( n2n_sn_t * sss )
 
             if (FD_ISSET(sss->sock6, &socket_mask)) 
             {
-                struct sockaddr_in6  sender_sock;
-                socklen_t           i;
-
-                i = sizeof(sender_sock);
                 bread = recvfrom( sss->sock6, pktbuf, N2N_SN_PKTBUF_SIZE, 0/*flags*/,
 				  (struct sockaddr*) &sender_sock, (socklen_t*) &i);
 
@@ -935,12 +953,8 @@ static int run_loop( n2n_sn_t * sss )
 
             if (FD_ISSET(sss->mgmt_sock, &socket_mask)) 
             {
-                struct sockaddr_in  sender_sock;
-                size_t              i;
-
-                i = sizeof(sender_sock);
                 bread = recvfrom( sss->mgmt_sock, pktbuf, N2N_SN_PKTBUF_SIZE, 0/*flags*/,
-				  (struct sockaddr *)&sender_sock, (socklen_t*)&i);
+				  (struct sockaddr *)&sender_sock, &i);
 
                 if ( bread <= 0 )
                 {
@@ -957,7 +971,7 @@ static int run_loop( n2n_sn_t * sss )
                 }
 
                 /* We have a datagram to process */
-                process_mgmt( sss, &sender_sock, pktbuf, bread, now );
+                process_mgmt( sss, (struct sockaddr*) &sender_sock, i, pktbuf, bread, now );
             }
         }
         else
