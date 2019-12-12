@@ -5,7 +5,7 @@ After=network.target
 
 [Service]
 DynamicUser=Yes
-ExecStart=/usr/local/bin/supernode -t /run/supernode/mgmt -f -l $PORT $PARAMETER
+ExecStart=supernode -t /run/supernode/mgmt -f -l $PORT $PARAMETER
 EnvironmentFile=/etc/n2n/supernode.conf
 RuntimeDirectory=supernode
 

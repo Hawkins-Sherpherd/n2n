@@ -6,7 +6,8 @@ After=network.target network-online.target
 [Service]
 DynamicUser=Yes
 AmbientCapabilities=CAP_NET_ADMIN
-ExecStart=/usr/local/bin/edge -t /run/edge-%i/mgmt -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS $PARAMETER
+ExecStart=edge -t /run/edge-%i/mgmt -f -d $N2N_DEVICE -l $SUPERNODE -c $COMMUNITY -a $IP_ADDRESS -m $MAC_ADDRESS $PARAMETER
+ExecReload=sh -c 'echo reload | socat stdin unix-sendto:/run/edge-%i/mgmt'
 EnvironmentFile=/etc/n2n/%i.conf
 ConfigurationDirectory=n2n
 RuntimeDirectory=edge-%i
