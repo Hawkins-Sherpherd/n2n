@@ -192,7 +192,7 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
         req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
         memcpy(RTA_DATA(rta), &device->ip6_addr, sizeof(struct in6_addr));
 
-        if (send(_sock, &req, sizeof(req), 0) < 0) {
+        if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
             traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
             close(_sock);
             return -1;
@@ -227,13 +227,14 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
 
     uint32_t address_size = 0; 
     if (device->routes) {
-        req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE |NLM_F_ACK;
+        req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_ACK;
         req.nl.nlmsg_type = RTM_NEWROUTE;
 
         memset(&req.rt, 0, sizeof(req.rt));
-        req.rt.rtm_table = RT_TABLE_DEFAULT;
+        req.rt.rtm_table = RT_TABLE_MAIN;
         req.rt.rtm_protocol = RTPROT_STATIC;
         req.rt.rtm_type = RTN_UNICAST;
+        req.rt.rtm_scope = RT_SCOPE_UNIVERSE;
         req.rt.rtm_flags = RTM_F_PREFIX;
 
         for(int i = 0; i < device->routes_count; i++) {
@@ -262,7 +263,7 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
             req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
             memcpy(RTA_DATA(rta), &r->gateway, address_size);
 
-            if (send(_sock, &req, sizeof(req), 0) < 0) {
+            if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
                 traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
                 close(_sock);
                 return -1;
