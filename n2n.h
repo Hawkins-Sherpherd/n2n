@@ -140,6 +140,13 @@ typedef struct ether_hdr ether_hdr_t;
 
 #include "n2n_wire.h"
 
+typedef struct route {
+    int family;
+    uint8_t dest[IPV6_SIZE];
+    uint8_t prefixlen;
+    uint8_t gateway[IPV6_SIZE];
+} route;
+
 /* N2N_IFNAMSIZ is needed on win32 even if dev_name is not used after declaration */
 #ifndef _WIN32
 #define N2N_IFNAMSIZ            16 /* 15 chars * NULL */
@@ -147,11 +154,14 @@ typedef struct ether_hdr ether_hdr_t;
 typedef struct tuntap_dev {
   int             fd;
   uint8_t         mac_addr[6];
-  uint32_t        ip_addr, device_mask;
+  uint32_t        ip_addr;
+  uint8_t         ip_prefixlen;
   struct in6_addr ip6_addr;
   uint8_t         ip6_prefixlen;
-  uint16_t        mtu;
+  uint32_t        mtu;
   char            dev_name[N2N_IFNAMSIZ];
+  uint8_t         routes_count;
+  route*          routes;
 } tuntap_dev;
 
 #define SOCKET int
@@ -169,6 +179,8 @@ struct tuntap_config {
     /* ipv6 configuration */
     struct in6_addr ip6_addr;
     uint8_t ip6_prefixlen;
+    uint8_t routes_count;
+    route* routes;
 };
 
 #define QUICKLZ               1

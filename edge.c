@@ -116,7 +116,7 @@ struct n2n_edge
     int                 null_transop;           /**< Only allowed if no key sources defined. */
 
     SOCKET              udp_sock;
-    SOCKET              mgmt_sock;          /**< socket for status info. */
+    SOCKET              mgmt_sock;               /**< socket for status info. */
 
     tuntap_dev          device;                 /**< All about the TUNTAP device */
     int                 dyn_ip_mode;            /**< Interface IP address is dynamically allocated, eg. DHCP. */
@@ -558,7 +558,7 @@ static void help() {
 #ifndef _WIN32
         "[-M <mtu>] "
 #endif
-        "[-r] [-E] [-v] [-t <mgmt port>] [-b] [-h]\n\n");
+        "[-r|-R <route>] [-E] [-v] [-t <mgmt port>] [-b] [-h]\n\n");
 #ifdef N2N_CAN_NAME_IFACE
     printf("-d <tun device>          | tun device name\n");
 #endif
@@ -585,6 +585,7 @@ static void help() {
     printf("-M <mtu>                 | Specify n2n MTU of edge interface (default %d).\n", DEFAULT_MTU);
 #endif
     printf("-r                       | Enable packet forwarding through n2n community.\n");
+    printf("-R <dest>/<length>,<gw>  | Enable packet forwarding and add a route, IPv4/6 is autodetected\n");
     printf("-E                       | Accept multicast MAC addresses (default=drop).\n");
     printf("-v                       | Make more verbose. Repeat as required.\n");
     printf("-t                       | Management Socket (UDP Port or absolute path). (default %d)\n", N2N_EDGE_MGMT_PORT);
@@ -2160,6 +2161,102 @@ static int scan_address6( char * ip6_addr, size_t addr_size,
     return retval;
 }
 
+/** Scan argument for route and add to route list
+ */
+static int scan_route(char* optarg, struct tuntap_config* tuntap_config) {
+    char* dest = optarg;
+    char* prefix = NULL;
+    char* gateway;
+    char* p = NULL;
+
+    prefix = strchr(dest, '/');
+    if (!prefix)
+    {
+        traceEvent(TRACE_ERROR, "%s is not a valid route", optarg);
+        return 0;
+    }
+    *prefix = '\0';
+    prefix += 1;
+    gateway = strchr(prefix, ',');
+    if (!gateway)
+    {
+        *prefix = '/';
+        traceEvent(TRACE_ERROR, "%s is not a valid route", optarg);
+        return 0;
+    }
+    *gateway = '\0';
+    gateway += 1;
+
+    assert((tuntap_config->routes_count == 0) == (tuntap_config->routes == NULL));
+    if (!tuntap_config->routes)
+    {
+        tuntap_config->routes = (route*) calloc(16, sizeof(route));
+    }
+    else if ((tuntap_config->routes_count % 16) == 15)
+    {
+        tuntap_config->routes = (route*) reallocarray(tuntap_config->routes, ((tuntap_config->routes_count / 16 + 2) * 16), sizeof(route));
+    }
+
+    route* r = &tuntap_config->routes[tuntap_config->routes_count];
+    if (inet_pton(AF_INET, dest, r->dest))
+    {
+        r->family = AF_INET;
+        if (!inet_pton(AF_INET, gateway, r->gateway))
+        {
+            traceEvent(TRACE_ERROR, "%s is not a valid gateway for an IPv4 network", gateway);
+            goto fail;
+        }
+        r->prefixlen = strtol(prefix, &p, 10);
+        if (p == NULL || p == prefix)
+        {
+            traceEvent(TRACE_ERROR, "%s is not a valid prefix length for an IPv4 network", prefix);
+            goto fail;
+        }
+        else if (r->prefixlen < 0 || r->prefixlen > 32)
+        {
+            traceEvent(TRACE_ERROR, "%s is not a valid prefix length for an IPv4 network", prefix);
+            goto fail;
+        }
+    } else {
+        if (!inet_pton(AF_INET6, dest, r->dest))
+        {
+            traceEvent(TRACE_ERROR, "%s is neither a valid IPv4 or IPv6 address", dest);
+            goto fail;
+        }
+        r->family = AF_INET6;
+        if (!inet_pton(AF_INET6, gateway, r->gateway))
+        {
+            traceEvent(TRACE_ERROR, "%s is not a valid gateway for an IPv6 network", gateway);
+            goto fail;
+        }
+        r->prefixlen = strtol(prefix, &p, 10);
+        if (p == NULL || p == prefix)
+        {
+            traceEvent(TRACE_ERROR, "%s is not a valid prefix length for an IPv6 network", prefix);
+            goto fail;
+        }
+        else if (r->prefixlen < 0 || r->prefixlen > 128)
+        {
+            traceEvent(TRACE_ERROR, "%s is not a valid prefix length for an IPv6 network", prefix);
+            goto fail;
+        }
+    }
+
+    tuntap_config->routes_count++;
+    return 1;
+fail:
+    if (tuntap_config->routes_count == 0)
+    {
+        free(tuntap_config->routes);
+        tuntap_config->routes = NULL;
+    }
+    else if ((tuntap_config->routes_count % 16) == 15)
+    {
+        tuntap_config->routes = (route*) reallocarray(tuntap_config->routes, ((tuntap_config->routes_count / 16 + 1) * 16), sizeof(route));
+    }
+    return 0;
+}
+
 static int run_loop(n2n_edge_t * eee );
 
 #define N2N_NETMASK_STR_SIZE    16 /* dotted decimal 12 numbers + 3 dots */
@@ -2294,7 +2391,7 @@ int main(int argc, char* argv[])
     optarg = NULL;
     while((opt = getopt_long(argc,
         argv,
-        "46K:k:a:A:bc:Eu:g:m:M:d:l:p:fvhrt:", long_options, NULL
+        "46K:k:a:A:bc:Eu:g:m:M:d:l:p:fvhrt:R:", long_options, NULL
     )) != EOF) {
         switch (opt) {
         case '4':
@@ -2386,6 +2483,12 @@ int main(int argc, char* argv[])
         }
         case 'r': /* enable packet routing across n2n endpoints */
         {
+            eee.allow_routing = 1;
+            break;
+        }
+        case 'R': /* add a route */
+        {
+            scan_route(optarg, &tuntap_config);
             eee.allow_routing = 1;
             break;
         }

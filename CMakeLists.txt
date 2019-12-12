@@ -63,6 +63,7 @@ add_library(n2n OBJECT
         wire.c
         version.c
 )
+set_property(TARGET n2n PROPERTY C_STANDARD 99)
 set(OBJECTS $<TARGET_OBJECTS:n2n>)
 
 if(DEFINED WIN32)
@@ -105,11 +106,13 @@ add_executable(edge
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
         target_link_libraries(edge cap)
 endif()
+set_property(TARGET edge PROPERTY C_STANDARD 99)
 
 add_executable(supernode
         sn.c
         ${OBJECTS} ${SN_RESOURCE}
 )
+set_property(TARGET supernode PROPERTY C_STANDARD 99)
 
 if(DEFINED WIN32)
 set_target_properties(edge PROPERTIES LINK_FLAGS "/manifestuac:level='requireAdministrator'")

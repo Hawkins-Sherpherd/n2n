@@ -15,11 +15,24 @@
  * along with this program; if not, see <http://www.gnu.org/licenses/>
 */
 
-#include "n2n.h"
 
 #ifdef __linux__
+#include <net/if.h>     /* if_nametoindex */
 #include <net/if_arp.h> /* required for ARPHRD_ETHER */
-#include <linux/ipv6.h> /* struct in6_ifreq */
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+
+#include "n2n.h"
+
+struct rtnl_req {
+    struct nlmsghdr nl;
+    union {
+        struct ifinfomsg ifinfo;
+        struct rtmsg     rt;
+        struct ifaddrmsg ifaddr;
+    };
+    uint8_t         buf[256];
+};
 
 static void read_mac(const char *ifname, n2n_mac_t mac_addr) {
     int _sock, res;
@@ -60,108 +73,212 @@ static int set_mac(int fd, const char* dev, n2n_mac_t device_mac) {
     return 0;
 }
 
-static int set_ipaddress(const tuntap_dev* device, int static_address) {
-    int _sock, _sock_in6, rc;
-    struct ifreq ifr;
-    struct in6_ifreq ifr6;
+static int netlink_recieve_ack(int nl_sock) {
+    uint8_t buf[1024] = { 0 };
+    ssize_t rtn = -1;
 
-    _sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (recv(nl_sock, buf, sizeof(buf), 0) > 0) {
+        struct nlmsghdr* nlp = (struct nlmsghdr*) buf;
+        if (nlp->nlmsg_type == NLMSG_ERROR) {
+            return -((struct nlmsgerr*) NLMSG_DATA(nlp))->error;
+        } else {
+            traceEvent(TRACE_DEBUG, "netlink recv() unexpected msg type: %d\n", nlp->nlmsg_type);
+            return -1;
+        }
+        rtn = 0;
+    }
+    return rtn;
+}
+
+static int set_ipaddress(const tuntap_dev* device, int static_address) {    
+    int ifnum = if_nametoindex(device->dev_name);
+    traceEvent(TRACE_DEBUG, "if_nametoindex(%s) %d\n", device->dev_name, ifnum);
+
+    int error;
+    int _sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
     if (_sock < 0) {
         traceEvent(TRACE_ERROR, "socket() [%s][%d]\n", strerror(errno), _sock);
         return -1;
     }
 
-    memset(&ifr, 0, sizeof(struct ifreq));
-    strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
+    struct sockaddr_nl nl_addr = {
+        .nl_family = AF_NETLINK,
+        .nl_pid = (uint32_t) getpid(),
+        .nl_groups = 0
+    };
 
-    /* set MTU */
-    ifr.ifr_mtu = device->mtu;
-    rc = ioctl(_sock, SIOCSIFMTU, &ifr);
-    if (rc < 0) {
-        traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
+    if (bind(_sock, (struct sockaddr*) &nl_addr, sizeof(nl_addr)) < 0) {
+        fprintf(stderr, "bind() [%s][%d]\n", strerror(errno), _sock);
         close(_sock);
         return -1;
     }
 
-    /* set ipv4 address */
+    struct rtnl_req req = { 0 };
+    struct rtattr* rta = NULL;
+
+    req.nl.nlmsg_len   = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+    req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+    req.nl.nlmsg_type  = RTM_SETLINK;
+    req.nl.nlmsg_pid   = (uint32_t) getpid();
+
+    req.ifinfo.ifi_family = AF_UNSPEC;
+    req.ifinfo.ifi_type = ARPHRD_ETHER;
+    req.ifinfo.ifi_index = ifnum;
+    req.ifinfo.ifi_change = 0xFFFFFFFF;
+
+    rta = (struct rtattr*) (((uint8_t*) &req) + NLMSG_ALIGN(req.nl.nlmsg_len));
+    rta->rta_len = RTA_LENGTH(sizeof(uint32_t));
+    rta->rta_type = IFLA_MTU;
+    req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
+    memcpy(RTA_DATA(rta), &device->mtu, sizeof(uint32_t));
+
+    if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
+        traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
+        close(_sock);
+        return -1;
+    }
+
+    if ((error = netlink_recieve_ack(_sock)) != 0) {
+        traceEvent(TRACE_ERROR, "netlink set_mtu %u: [%s]", device->mtu, strerror(error));
+        close(_sock);
+        return -1;
+    }
+
     if (static_address) {
-        memset(&ifr, 0, sizeof(struct ifreq));
-        strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
+        req.nl.nlmsg_len  = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
+        req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_ACK;
+        req.nl.nlmsg_type = RTM_NEWADDR;
 
-        ifr.ifr_addr.sa_family = AF_INET;
-        ((struct sockaddr_in*) &ifr.ifr_addr)->sin_addr.s_addr = device->ip_addr;
-   
-        rc = ioctl(_sock, SIOCSIFADDR, &ifr);
-        if (rc < 0) {
-            traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
+        memset(&req.ifaddr, 0, sizeof(req.ifaddr));
+        req.ifaddr.ifa_family = AF_INET;
+        req.ifaddr.ifa_index = ifnum;
+        req.ifaddr.ifa_prefixlen = device->ip_prefixlen;
+        req.ifaddr.ifa_scope = RT_SCOPE_UNIVERSE;
+
+        rta = (struct rtattr*) (((uint8_t*) &req) + NLMSG_ALIGN(req.nl.nlmsg_len));
+        rta->rta_len = RTA_LENGTH(sizeof(struct in_addr));
+        rta->rta_type = IFA_LOCAL;
+        req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
+        memcpy(RTA_DATA(rta), &device->ip_addr, sizeof(struct in_addr));
+
+        if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
+            traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
             close(_sock);
             return -1;
         }
 
-        /* set netmask */
-        ifr.ifr_addr.sa_family = AF_INET;
-        ((struct sockaddr_in*) &ifr.ifr_addr)->sin_addr.s_addr = device->device_mask;
-
-        rc = ioctl(_sock, SIOCSIFNETMASK, &ifr);
-        if (rc < 0) {
-            traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
+        if ((error = netlink_recieve_ack(_sock)) != 0) {
+            traceEvent(TRACE_ERROR, "netlink set_ip: [%s]", strerror(error));
             close(_sock);
             return -1;
         }
-
     }
 
     /* set ipv6 address */
     if (static_address && device->ip6_prefixlen > 0) {
-        _sock_in6 = socket(PF_INET6, SOCK_DGRAM, IPPROTO_IP);
+        req.nl.nlmsg_len  = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
+        req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE |NLM_F_ACK;
+        req.nl.nlmsg_type = RTM_NEWADDR;
+        
+        memset(&req.ifaddr, 0, sizeof(req.ifaddr));
+        req.ifaddr.ifa_family = AF_INET6;
+        req.ifaddr.ifa_index = ifnum;
+        req.ifaddr.ifa_prefixlen = device->ip6_prefixlen;
+        req.ifaddr.ifa_scope = RT_SCOPE_UNIVERSE;
 
-        /* get the interface number */
-        memset(&ifr, 0, sizeof(struct ifreq));
-        strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
-        rc = ioctl(_sock_in6, SIOGIFINDEX, &ifr);
-        if (rc < 0) {
-            traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
-            close(_sock_in6);
-            close(_sock);
-            return -1;
-        }
-   
-        /* set address and prefix */
-        memset(&ifr6, 0, sizeof(ifr6));
-        struct in6_addr* in6_addr = (struct in6_addr*) &ifr6.ifr6_addr;
-        memcpy(in6_addr, &device->ip6_addr, IPV6_SIZE);
-        ifr6.ifr6_prefixlen = device->ip6_prefixlen;
-        ifr6.ifr6_ifindex = ifr.ifr_ifindex;
-        rc = ioctl(_sock_in6, SIOCSIFADDR, &ifr6);
-        if (rc < 0) {
-            traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
-            close(_sock_in6);
+        rta = (struct rtattr *)(((uint8_t*) &req) +  NLMSG_ALIGN(req.nl.nlmsg_len));
+        rta->rta_len = RTA_LENGTH(sizeof(struct in6_addr));
+        rta->rta_type = IFA_LOCAL;
+        req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
+        memcpy(RTA_DATA(rta), &device->ip6_addr, sizeof(struct in6_addr));
+
+        if (send(_sock, &req, sizeof(req), 0) < 0) {
+            traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
             close(_sock);
             return -1;
         }
 
-        close(_sock_in6);
+        if ((error = netlink_recieve_ack(_sock)) != 0) {
+            traceEvent(TRACE_ERROR, "netlink set_ip6: [%s]", strerror(error));
+            close(_sock);
+            return -1;
+        }
     }
-    
-    memset(&ifr, 0, sizeof(struct ifreq));
-    strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
 
+    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    struct ifreq ifr = { 0 };
+    strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
     /* retrieve flags */
-    rc = ioctl(_sock, SIOCGIFFLAGS, &ifr);
-    if (rc < 0) {
-        traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
-        close(_sock);
+    if (ioctl(s, SIOCGIFFLAGS, &ifr) < 0) {
+        traceEvent(TRACE_ERROR, "ioctl(SIOCGIFFLAGS) [%s]\n", strerror(errno));
+        close(s);
         return -1;
     }
 
     /* bring up interface */
     ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
-
-    rc = ioctl(_sock, SIOCSIFFLAGS, &ifr);
-    if (rc < 0) {
-        traceEvent(TRACE_ERROR, "ioctl() [%s][%d]\n", strerror(errno), rc);
-        close(_sock);
+    if (ioctl(s, SIOCSIFFLAGS, &ifr) < 0) {
+        traceEvent(TRACE_ERROR, "ioctl(SIOCSIFFLAGS) [%s]\n", strerror(errno));
+        close(s);
         return -1;
+    }
+    
+    close(s);
+
+    uint32_t address_size = 0; 
+    if (device->routes) {
+        req.nl.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE |NLM_F_ACK;
+        req.nl.nlmsg_type = RTM_NEWROUTE;
+
+        memset(&req.rt, 0, sizeof(req.rt));
+        req.rt.rtm_table = RT_TABLE_DEFAULT;
+        req.rt.rtm_protocol = RTPROT_STATIC;
+        req.rt.rtm_type = RTN_UNICAST;
+        req.rt.rtm_flags = RTM_F_PREFIX;
+
+        for(int i = 0; i < device->routes_count; i++) {
+            route* r = &device->routes[i];
+            if (r->family == AF_INET)
+                address_size = sizeof(struct in_addr);
+            else if (r->family == AF_INET6)
+                address_size = sizeof(struct in6_addr);
+            else abort();
+
+            req.nl.nlmsg_len  = NLMSG_LENGTH(sizeof(struct rtmsg));
+            req.rt.rtm_family = r->family;
+            req.rt.rtm_dst_len = r->prefixlen;
+            
+            // 1st attribute: DST address
+            rta = (struct rtattr *)(((uint8_t*) &req) + NLMSG_ALIGN(req.nl.nlmsg_len));
+            rta->rta_type = RTA_DST;
+            rta->rta_len = RTA_LENGTH(address_size);
+            req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
+            memcpy(RTA_DATA(rta), &r->dest, address_size);
+
+            // 2nd attribute: set ifc index and increment the size
+            rta = (struct rtattr*)(((uint8_t*) &req) + NLMSG_ALIGN(req.nl.nlmsg_len));
+            rta->rta_type = RTA_GATEWAY;
+            rta->rta_len =  RTA_LENGTH(address_size);
+            req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
+            memcpy(RTA_DATA(rta), &r->gateway, address_size);
+
+            if (send(_sock, &req, sizeof(req), 0) < 0) {
+                traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
+                close(_sock);
+                return -1;
+            }
+
+            if ((error = netlink_recieve_ack(_sock)) != 0) {
+                char buf1[INET6_ADDRSTRLEN];
+                char buf2[INET6_ADDRSTRLEN];
+                traceEvent(TRACE_ERROR, "netlink add_route: %s/%u via %s [%s]",
+                    inet_ntop(r->family, r->dest, buf1, INET6_ADDRSTRLEN),
+                    r->prefixlen,
+                    inet_ntop(r->family, r->gateway, buf2, INET6_ADDRSTRLEN),
+                    strerror(error)
+                );
+            }
+        }
     }
     
     close(_sock);
@@ -217,14 +334,13 @@ int tuntap_open(tuntap_dev *device, struct tuntap_config* config) {
 
     /* Store the device name for later reuse */
     strncpy(device->dev_name, config->if_name, MIN(IFNAMSIZ, N2N_IFNAMSIZ) );
-
     memcpy(&device->ip_addr, &config->ip_addr, sizeof(config->ip_addr));
-
-    device->device_mask = ip4_prefixlen_to_netmask(config->ip_prefixlen);
+    device->ip_prefixlen = config->ip_prefixlen;
     memcpy(&device->ip6_addr, &config->ip6_addr, sizeof(config->ip6_addr));
-
     device->ip6_prefixlen = config->ip6_prefixlen;
     device->mtu = config->mtu;
+    device->routes_count = config->routes_count;
+    device->routes = config->routes;
 
     read_mac(device->dev_name, device->mac_addr);
 
