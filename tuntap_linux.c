@@ -73,9 +73,37 @@ static int set_mac(int fd, const char* dev, n2n_mac_t device_mac) {
     return 0;
 }
 
-static int netlink_recieve_ack(int nl_sock) {
+static int netlink_talk(int nl_sock, struct rtnl_req* req) {
     uint8_t buf[1024] = { 0 };
     ssize_t rtn = -1;
+
+    struct iovec iov = {
+        .iov_base = req,
+        .iov_len = req->nl.nlmsg_len
+    };
+
+    struct sockaddr_nl nl_addr = {
+        .nl_family = AF_NETLINK,
+        .nl_pid = 0,
+        .nl_groups = 0
+    };
+
+    const struct msghdr msg = {
+        .msg_name = &nl_addr,
+        .msg_namelen = sizeof(nl_addr),
+
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+
+        .msg_control = NULL,
+        .msg_controllen = 0,
+        .msg_flags = 0
+    };
+
+    if (sendmsg(nl_sock, &msg, 0) < 0) {
+        traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
+        return -1;
+    }
 
     if (recv(nl_sock, buf, sizeof(buf), 0) > 0) {
         struct nlmsghdr* nlp = (struct nlmsghdr*) buf;
@@ -88,6 +116,32 @@ static int netlink_recieve_ack(int nl_sock) {
         rtn = 0;
     }
     return rtn;
+}
+
+static int set_device_state(const tuntap_dev* device, bool up) {
+    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    struct ifreq ifr = { 0 };
+    strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
+    /* retrieve flags */
+    if (ioctl(s, SIOCGIFFLAGS, &ifr) < 0) {
+        traceEvent(TRACE_INFO, "ioctl(SIOCGIFFLAGS) [%s]\n", strerror(errno));
+        close(s);
+        return -1;
+    }
+
+    /* bring up interface */
+    if (up)
+        ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
+    else
+        ifr.ifr_flags &= IFF_UP | IFF_RUNNING;
+    if (ioctl(s, SIOCSIFFLAGS, &ifr) < 0) {
+        traceEvent(TRACE_INFO, "ioctl(SIOCSIFFLAGS) [%s]\n", strerror(errno));
+        close(s);
+        return -1;
+    }
+
+    close(s);
+    return 0;
 }
 
 static int set_ipaddress(const tuntap_dev* device, int static_address) {    
@@ -132,13 +186,9 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
     req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
     memcpy(RTA_DATA(rta), &device->mtu, sizeof(uint32_t));
 
-    if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
-        traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
-        close(_sock);
-        return -1;
-    }
+    
 
-    if ((error = netlink_recieve_ack(_sock)) != 0) {
+    if ((error = netlink_talk(_sock, &req)) != 0) {
         traceEvent(TRACE_ERROR, "netlink set_mtu %u: [%s]", device->mtu, strerror(error));
         close(_sock);
         return -1;
@@ -161,13 +211,7 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
         req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
         memcpy(RTA_DATA(rta), &device->ip_addr, sizeof(struct in_addr));
 
-        if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
-            traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
-            close(_sock);
-            return -1;
-        }
-
-        if ((error = netlink_recieve_ack(_sock)) != 0) {
+        if ((error = netlink_talk(_sock, &req)) != 0) {
             traceEvent(TRACE_ERROR, "netlink set_ip: [%s]", strerror(error));
             close(_sock);
             return -1;
@@ -192,38 +236,17 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
         req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
         memcpy(RTA_DATA(rta), &device->ip6_addr, sizeof(struct in6_addr));
 
-        if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
-            traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
-            close(_sock);
-            return -1;
-        }
-
-        if ((error = netlink_recieve_ack(_sock)) != 0) {
+        if ((error = netlink_talk(_sock, &req)) != 0) {
             traceEvent(TRACE_ERROR, "netlink set_ip6: [%s]", strerror(error));
             close(_sock);
             return -1;
         }
     }
 
-    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    struct ifreq ifr = { 0 };
-    strncpy(ifr.ifr_name, device->dev_name, IFNAMSIZ);
-    /* retrieve flags */
-    if (ioctl(s, SIOCGIFFLAGS, &ifr) < 0) {
-        traceEvent(TRACE_ERROR, "ioctl(SIOCGIFFLAGS) [%s]\n", strerror(errno));
-        close(s);
+    if (set_device_state(device, true) != 0) {
+        traceEvent(TRACE_ERROR, "netlink device up: [%s]", strerror(error));
         return -1;
     }
-
-    /* bring up interface */
-    ifr.ifr_flags |= IFF_UP | IFF_RUNNING;
-    if (ioctl(s, SIOCSIFFLAGS, &ifr) < 0) {
-        traceEvent(TRACE_ERROR, "ioctl(SIOCSIFFLAGS) [%s]\n", strerror(errno));
-        close(s);
-        return -1;
-    }
-    
-    close(s);
 
     uint32_t address_size = 0; 
     if (device->routes) {
@@ -263,13 +286,7 @@ static int set_ipaddress(const tuntap_dev* device, int static_address) {
             req.nl.nlmsg_len = NLMSG_ALIGN(req.nl.nlmsg_len) + rta->rta_len;
             memcpy(RTA_DATA(rta), &r->gateway, address_size);
 
-            if (send(_sock, &req, req.nl.nlmsg_len, 0) < 0) {
-                traceEvent(TRACE_ERROR, "netlink send() [%s]\n", strerror(errno));
-                close(_sock);
-                return -1;
-            }
-
-            if ((error = netlink_recieve_ack(_sock)) != 0) {
+            if ((error = netlink_talk(_sock, &req)) != 0) {
                 char buf1[INET6_ADDRSTRLEN];
                 char buf2[INET6_ADDRSTRLEN];
                 traceEvent(TRACE_ERROR, "netlink add_route: %s/%u via %s [%s]",
