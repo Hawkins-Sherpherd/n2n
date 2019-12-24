@@ -33,7 +33,6 @@
 #undef N2N_HAVE_DAEMON
 #undef N2N_HAVE_SETUID
 
-#include "win32/n2n_win32.h"
 /* windows can't name an interface, but we can tell edge which to use */
 #define N2N_CAN_NAME_IFACE 1
 
@@ -49,6 +48,7 @@
 
 #include <time.h>
 #include <ctype.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
 

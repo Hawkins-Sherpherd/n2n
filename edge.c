@@ -2206,7 +2206,7 @@ static int scan_route(char* optarg, struct tuntap_config* tuntap_config) {
             traceEvent(TRACE_ERROR, "%s is not a valid gateway for an IPv4 network", gateway);
             goto fail;
         }
-        r->prefixlen = strtol(prefix, &p, 10);
+        r->prefixlen = (uint8_t) strtol(prefix, &p, 10);
         if (p == NULL || p == prefix)
         {
             traceEvent(TRACE_ERROR, "%s is not a valid prefix length for an IPv4 network", prefix);
@@ -2229,7 +2229,7 @@ static int scan_route(char* optarg, struct tuntap_config* tuntap_config) {
             traceEvent(TRACE_ERROR, "%s is not a valid gateway for an IPv6 network", gateway);
             goto fail;
         }
-        r->prefixlen = strtol(prefix, &p, 10);
+        r->prefixlen = (uint8_t) strtol(prefix, &p, 10);
         if (p == NULL || p == prefix)
         {
             traceEvent(TRACE_ERROR, "%s is not a valid prefix length for an IPv6 network", prefix);

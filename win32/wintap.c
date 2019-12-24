@@ -30,7 +30,7 @@ static int get_adapter_luid(PWSTR device_name, NET_LUID* luid) {
 
     if (CLSIDFromString(device_name, &guid) != NO_ERROR)
         return -1;
-    
+
     if (ConvertInterfaceGuidToLuid(&guid, luid) != NO_ERROR)
         return -1;
 
@@ -66,7 +66,6 @@ static uint32_t set_dhcp(struct tuntap_dev* device) {
 }
 
 static uint32_t set_static_ip_address(struct tuntap_dev* device) {
-#if 1
     uint32_t rc;
     MIB_UNICASTIPADDRESS_ROW ip_row;
     PMIB_UNICASTIPADDRESS_TABLE ip_address_table = NULL;
@@ -106,43 +105,41 @@ static uint32_t set_static_ip_address(struct tuntap_dev* device) {
     }
 
     return rc;
-#else
-    wchar_t if_name[MAX_ADAPTER_NAME_LENGTH];
-    wchar_t windows_path[64], cmd[128], netsh[256];
-    char ip[INET6_ADDRSTRLEN], mask[INET_ADDRSTRLEN];
-    SHELLEXECUTEINFO shex;
-    uint32_t rc;
+}
 
-    ConvertInterfaceLuidToNameW(&device->luid, if_name, MAX_ADAPTER_NAME_LENGTH);
-    GetEnvironmentVariable(L"SystemRoot", windows_path, 256);
-    inet_ntop(AF_INET, &device->ip_addr, ip, INET_ADDRSTRLEN);
-    inet_ntop(AF_INET, &device->device_mask, mask, INET_ADDRSTRLEN);
+static uint32_t set_static_routes(struct tuntap_dev* device) {
+    MIB_IPFORWARD_ROW2 route;
+    uint32_t rc = 0;
 
-    _snwprintf(cmd, 256, L"%s\\system32\\netsh.exe", windows_path);
-    _snwprintf(netsh, 1024, L"interface ipv4 set address %s static %hs %hs", if_name, ip, mask);
-    memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
+    for(int i = 0; i < device->routes_count; i++) {
+        struct route* r = &device->routes[i];
 
-    shex.cbSize       = sizeof( SHELLEXECUTEINFO );
-    shex.fMask        = SEE_MASK_NO_CONSOLE | SEE_MASK_NOASYNC;
-    shex.lpVerb       = L"runas";
-    shex.lpFile       = cmd;
-    shex.lpParameters = netsh;
+        InitializeIpForwardEntry(&route);
+        memset(&route, 0, sizeof(route));
+        memcpy(&route.InterfaceLuid, &device->luid, sizeof(NET_LUID));
+        if (r->family == AF_INET) {
+            route.DestinationPrefix.Prefix.Ipv4.sin_family = AF_INET;
+            memcpy(&route.DestinationPrefix.Prefix.Ipv4.sin_addr, r->dest, sizeof(struct in_addr));
 
-    rc = ShellExecuteEx(&shex);
+            route.NextHop.Ipv6.sin6_family = AF_INET;
+            memcpy(&route.NextHop.Ipv4.sin_addr, r->gateway, sizeof(struct in_addr));
+        } else if (r->family == AF_INET6) {
+            route.DestinationPrefix.Prefix.Ipv6.sin6_family = AF_INET6;
+            memcpy(&route.DestinationPrefix.Prefix.Ipv6.sin6_addr, r->dest, sizeof(struct in6_addr));
 
-    inet_ntop(AF_INET6, &device->ip6_addr, ip, INET6_ADDRSTRLEN);
-    _snwprintf(netsh, 1024, L"interface ipv6 set address %s %hs/%hu", if_name, ip, device->ip6_prefixlen);
-    memset( &shex, 0, sizeof(SHELLEXECUTEINFO) );
+            route.NextHop.Ipv6.sin6_family = AF_INET6;
+            memcpy(&route.NextHop.Ipv6.sin6_addr, r->gateway, sizeof(struct in6_addr));
+        }
+        route.DestinationPrefix.PrefixLength = r->prefixlen;
+        route.SitePrefixLength = r->prefixlen;
+        route.ValidLifetime = 0xffffffff;
+        route.PreferredLifetime = 0xffffffff;
 
-    shex.cbSize       = sizeof( SHELLEXECUTEINFO );
-    shex.fMask        = SEE_MASK_NO_CONSOLE | SEE_MASK_NOASYNC;
-    shex.lpVerb       = L"runas";
-    shex.lpFile       = cmd;
-    shex.lpParameters = netsh;
+        rc &= CreateIpForwardEntry2(&route);
+            return rc;
+    }
 
-    rc = ShellExecuteEx(&shex);
-    return 0;
-#endif
+    return rc;
 }
 
 int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
@@ -187,7 +184,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         swprintf(regpath, sizeof(regpath), NETWORK_CONNECTIONS_KEY L"\\%s\\Connection", adapterid);
         if(RegOpenKeyEx(HKEY_LOCAL_MACHINE, regpath, 0, KEY_READ, &key2))
             continue;
-        
+
         len = sizeof(adaptername);
         err = RegQueryValueExW(key2, L"Name", NULL, NULL, (LPBYTE) adaptername, &len);
 
@@ -267,38 +264,40 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
     device->ip6_prefixlen = config->ip6_prefixlen;
     device->mtu = config->mtu;
     device->dyn_ip4 = config->dyn_ip4;
+    device->routes = config->routes;
+    device->routes_count = config->routes_count;
 
     traceEvent(TRACE_NORMAL, "Interface %ls has MAC %s", adaptername, macaddr_str(mac_addr_buf, device->mac_addr));
-#if 0
-    printf("Open device [name=%ls][ip=%s][ifIdx=%u][MTU=%d][mac=%02X:%02X:%02X:%02X:%02X:%02X]\n",
-           device->device_name,
-           inet_ntop(AF_INET, &device->ip_addr, (PSTR) &ip_address, INET_ADDRSTRLEN),
-           device->ifIdx, device->mtu,
-           device->mac_addr[0] & 0xFF,
-           device->mac_addr[1] & 0xFF,
-           device->mac_addr[2] & 0xFF,
-           device->mac_addr[3] & 0xFF,
-           device->mac_addr[4] & 0xFF,
-           device->mac_addr[5] & 0xFF);
-#endif
 
     /* ****************** */
 
-    /* printf("Setting %ls device address...\n", device->device_name); */
-
     if (device->dyn_ip4) {
         rc = set_dhcp(device);
-    } else {        
+    } else {
         rc = set_static_ip_address(device);
     }
 
-    if (rc == 0) {
-        tuntap_get_address(device);
-    } else {
+    if (rc != 0) {
         W32_ERROR(rc, error)
         traceEvent(TRACE_WARNING, "Unable to set device %ls IP address: %u", adaptername, error);
         W32_ERROR_FREE(error)
+
+        return -1;
     }
+
+    if (device->routes_count > 0) {
+        rc = set_static_routes(device);
+
+        if (rc != 0) {
+            W32_ERROR(rc, error)
+            traceEvent(TRACE_WARNING, "Unable to set device %ls static route: %u", adaptername, error);
+            W32_ERROR_FREE(error)
+
+            return -1;
+        }
+    }
+
+    tuntap_get_address(device);
 
     /* ****************** */
 
@@ -325,7 +324,7 @@ int tuntap_open(struct tuntap_dev *device, struct tuntap_config* config) {
         return -1;
     }
 
-    return(0);
+    return 0;
 }
 
 /* ************************************************ */
@@ -401,7 +400,7 @@ int tuntap_restart( tuntap_dev* device ) {
     long len;
 
     CloseHandle(device->device_handle);
-    
+
     ResetEvent(device->overlap_write.hEvent);
     ResetEvent(device->overlap_read.hEvent);
 
@@ -420,17 +419,31 @@ int tuntap_restart( tuntap_dev* device ) {
 
     if (device->dyn_ip4) {
         rc = set_dhcp(device);
-    } else {        
+    } else {
         rc = set_static_ip_address(device);
     }
 
-    if (rc == 0) {
-        tuntap_get_address(device);
-    } else {
+    if (rc != 0) {
         W32_ERROR(rc, error)
         traceEvent(TRACE_WARNING, "Unable to set device %ls IP address: %u", device->device_name, error);
         W32_ERROR_FREE(error)
+
+        return -1;
     }
+
+    if (device->routes_count > 0) {
+        rc = set_static_routes(device);
+
+        if (rc != 0) {
+            W32_ERROR(rc, error)
+            traceEvent(TRACE_WARNING, "Unable to set device %ls static route: %u", device->device_name, error);
+            W32_ERROR_FREE(error)
+
+            return -1;
+        }
+    }
+
+    tuntap_get_address(device);
 
     if(device->mtu != DEFAULT_MTU)
         traceEvent(TRACE_WARNING, "MTU set is not supported on Windows");
@@ -481,7 +494,7 @@ void tuntap_get_address(struct tuntap_dev *tuntap) {
                     mask = ((mask | 0x8000) | mask >> 1);
                 uni = uni->Next;
             }
-            
+
             break;
         }
         adapter = adapter->Next;

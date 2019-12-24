@@ -9,9 +9,6 @@
 
 #ifdef _WIN32
 
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_NONSTDC_NO_DEPRECATE
-
 /* use our own definition for min/max */
 #define NOMINMAX
 
@@ -63,6 +60,8 @@ typedef long ssize_t;
 #endif
 #endif /* #ifdef _MSC_VER */
 
+#define reallocarray(p, n, s) realloc((p), ((n)*(s)))
+
 #define access _access
 #define R_OK 4
 
@@ -92,6 +91,8 @@ typedef struct tuntap_dev {
 	struct in6_addr ip6_addr;
 	uint8_t      ip6_prefixlen;
 	uint32_t     mtu;
+    uint8_t      routes_count;
+    struct route* routes;
 } tuntap_dev;
 
 #define W32_ERROR(rc, error_string) \

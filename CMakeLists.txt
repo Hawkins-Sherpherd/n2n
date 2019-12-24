@@ -70,6 +70,7 @@ if(DEFINED WIN32)
 set(CMAKE_RC_FLAGS /nologo)
 if (MSVC)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4477 /wd4267 /utf-8")
+add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
 endif(MSVC)
 
 add_subdirectory(win32)
