@@ -1,6 +1,6 @@
 /* Supernode for n2n-2.x */
 
-/* (c) 2009 Richard Andrews <andrews@ntop.org> 
+/* (c) 2009 Richard Andrews <andrews@ntop.org>
  *
  * Contributions by:
  *    Lukasz Taczuk
@@ -44,13 +44,13 @@ struct n2n_sn
 typedef struct n2n_sn n2n_sn_t;
 
 
-static int try_forward( n2n_sn_t * sss, 
+static int try_forward( n2n_sn_t * sss,
                         const n2n_common_t * cmn,
                         const n2n_mac_t dstMac,
                         const uint8_t * pktbuf,
                         size_t pktsize );
 
-static int try_broadcast( n2n_sn_t * sss, 
+static int try_broadcast( n2n_sn_t * sss,
                           const n2n_common_t * cmn,
                           const n2n_mac_t srcMac,
                           const uint8_t * pktbuf,
@@ -119,7 +119,7 @@ static uint16_t reg_lifetime( n2n_sn_t * sss )
 
 /** Update the edge table with the details of the edge which contacted the
  *  supernode. */
-static int update_edge( n2n_sn_t * sss, 
+static int update_edge( n2n_sn_t * sss,
                         const n2n_mac_t edgeMac,
                         const n2n_community_t community,
                         const n2n_sock_t * sender_sock,
@@ -184,9 +184,9 @@ static int update_edge( n2n_sn_t * sss,
  *
  *  @return -1 on error otherwise number of bytes sent
  */
-static ssize_t sendto_sock(n2n_sn_t * sss, 
-                           const n2n_sock_t * sock, 
-                           const uint8_t * pktbuf, 
+static ssize_t sendto_sock(n2n_sn_t * sss,
+                           const n2n_sock_t * sock,
+                           const uint8_t * pktbuf,
                            size_t pktsize)
 {
     n2n_sock_str_t      sockbuf;
@@ -203,7 +203,7 @@ static ssize_t sendto_sock(n2n_sn_t * sss,
                     pktsize,
                     sock_to_cstr( sockbuf, sock ) );
 
-        return sendto( sss->sock, pktbuf, pktsize, 0, 
+        return sendto( sss->sock, pktbuf, pktsize, 0,
                        (const struct sockaddr *)&udpsock, sizeof(struct sockaddr_in) );
     }
     else if ( AF_INET6 == sock->family )
@@ -218,7 +218,7 @@ static ssize_t sendto_sock(n2n_sn_t * sss,
                     pktsize,
                     sock_to_cstr( sockbuf, sock ) );
 
-        return sendto( sss->sock6, pktbuf, pktsize, 0, 
+        return sendto( sss->sock6, pktbuf, pktsize, 0,
                        (const struct sockaddr *)&udpsock, sizeof(struct sockaddr_in6) );
     }
     else
@@ -233,7 +233,7 @@ static ssize_t sendto_sock(n2n_sn_t * sss,
 /** Try to forward a message to a unicast MAC. If the MAC is unknown then
  *  broadcast to all edges in the destination community.
  */
-static int try_forward( n2n_sn_t * sss, 
+static int try_forward( n2n_sn_t * sss,
                         const n2n_common_t * cmn,
                         const n2n_mac_t dstMac,
                         const uint8_t * pktbuf,
@@ -285,7 +285,7 @@ static int try_forward( n2n_sn_t * sss,
 
         /* Not a known MAC so drop. */
     }
-    
+
     return 0;
 }
 
@@ -295,7 +295,7 @@ static int try_forward( n2n_sn_t * sss,
  *  This will send the exact same datagram to zero or more edges registered to
  *  the supernode.
  */
-static int try_broadcast( n2n_sn_t * sss, 
+static int try_broadcast( n2n_sn_t * sss,
                           const n2n_common_t * cmn,
                           const n2n_mac_t srcMac,
                           const uint8_t * pktbuf,
@@ -308,14 +308,14 @@ static int try_broadcast( n2n_sn_t * sss,
     traceEvent( TRACE_DEBUG, "try_broadcast" );
 
     scan = sss->edges;
-    while(scan != NULL) 
+    while(scan != NULL)
     {
         if( 0 == (memcmp(scan->community_name, cmn->community, sizeof(n2n_community_t)) )
             && (0 != memcmp(srcMac, scan->mac_addr, sizeof(n2n_mac_t)) ) )
             /* REVISIT: exclude if the destination socket is where the packet came from. */
         {
             ssize_t data_sent_len;
-          
+
             data_sent_len = sendto_sock(sss, &(scan->sock), pktbuf, pktsize);
 
             if(data_sent_len != pktsize)
@@ -337,7 +337,7 @@ static int try_broadcast( n2n_sn_t * sss,
                            strerror(errno));
 #endif
             }
-            else 
+            else
             {
                 ++(sss->stats.broadcast);
                 traceEvent(TRACE_DEBUG, "multicast %lu to %s %s",
@@ -349,15 +349,15 @@ static int try_broadcast( n2n_sn_t * sss,
 
         scan = scan->next;
     } /* while */
-    
+
     return 0;
 }
 
 
-static int process_mgmt( n2n_sn_t * sss, 
+static int process_mgmt( n2n_sn_t * sss,
                          const struct sockaddr * sender_sock,
                          socklen_t sender_sock_len,
-                         const uint8_t * mgmt_buf, 
+                         const uint8_t * mgmt_buf,
                          size_t mgmt_size,
                          time_t now)
 {
@@ -367,46 +367,54 @@ static int process_mgmt( n2n_sn_t * sss,
 
     traceEvent( TRACE_DEBUG, "process_mgmt" );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
                          "----------------\n" );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
                          "uptime    %ld\n", (long) (now - sss->start_time) );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
-                         "edges     %u\n", 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
+                         "edges     %u\n",
 			 (unsigned int)peer_list_size( sss->edges ) );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
-                         "errors    %u\n", 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
+                         "errors    %u\n",
 			 (unsigned int)sss->stats.errors );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
-                         "reg_sup   %u\n", 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
+                         "reg_sup   %u\n",
 			 (unsigned int)sss->stats.reg_super );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
-                         "reg_nak   %u\n", 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
+                         "reg_nak   %u\n",
 			 (unsigned int)sss->stats.reg_super_nak );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
                          "fwd       %u\n",
 			 (unsigned int) sss->stats.fwd );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
                          "broadcast %u\n",
 			 (unsigned int) sss->stats.broadcast );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
-                         "last fwd  %lu sec ago\n", 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
+                         "last fwd  %lu sec ago\n",
 			 (long unsigned int)(now - sss->stats.last_fwd) );
 
-    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize, 
+    ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
                          "last reg  %lu sec ago\n",
 			 (long unsigned int) (now - sss->stats.last_reg_super) );
 
+    for (struct peer_info* list = sss->edges; list; list = list->next) {
+        macstr_t buf0; n2n_sock_str_t buf1;
+        ressize += snprintf( resbuf+ressize, N2N_SN_PKTBUF_SIZE-ressize,
+                         "%s %s %s\n",
+                list->community_name,
+                macaddr_str(buf0, list->mac_addr),
+                sock_to_cstr(buf1, &list->sock) );
+    }
 
-    r = sendto( sss->mgmt_sock, resbuf, ressize, 0/*flags*/, 
+    r = sendto( sss->mgmt_sock, resbuf, ressize, 0/*flags*/,
                 sender_sock, sender_sock_len );
 
     if ( r <= 0 )
@@ -428,9 +436,9 @@ static int process_mgmt( n2n_sn_t * sss,
 /** Examine a datagram and determine what to do with it.
  *
  */
-static int process_udp( n2n_sn_t * sss, 
+static int process_udp( n2n_sn_t * sss,
                         const struct sockaddr * sender_sock,
-                        const uint8_t * udp_buf, 
+                        const uint8_t * udp_buf,
                         size_t udp_size,
                         time_t now)
 {
@@ -480,7 +488,7 @@ static int process_udp( n2n_sn_t * sss,
 
         /* pkt will be modified in place and recoded to an output of potentially
          * different size due to addition of the socket.*/
-        n2n_PACKET_t                    pkt; 
+        n2n_PACKET_t                    pkt;
         n2n_common_t                    cmn2;
         uint8_t                         encbuf[N2N_SN_PKTBUF_SIZE];
         size_t                          encx=0;
@@ -562,7 +570,7 @@ static int process_udp( n2n_sn_t * sss,
         decode_REGISTER( &reg, &cmn, udp_buf, &rem, &idx );
 
         unicast = (0 == is_multi_broadcast(reg.dstMac) );
-        
+
         if ( unicast )
         {
         traceEvent( TRACE_DEBUG, "Rx REGISTER %s -> %s %s",
@@ -627,7 +635,7 @@ static int process_udp( n2n_sn_t * sss,
         size_t                          encx=0;
 
         /* Edge requesting registration with us.  */
-        
+
         sss->stats.last_reg_super=now;
         ++(sss->stats.reg_super);
         decode_REGISTER_SUPER( &reg, &cmn, udp_buf, &rem, &idx );
@@ -664,7 +672,7 @@ static int process_udp( n2n_sn_t * sss,
 
         encode_REGISTER_SUPER_ACK( ackbuf, &encx, &cmn2, &ack );
 
-        sendto( sss->sock, ackbuf, encx, 0, 
+        sendto( sss->sock, ackbuf, encx, 0,
                 (struct sockaddr *)sender_sock, sizeof(struct sockaddr_in) );
 
         traceEvent( TRACE_DEBUG, "Tx REGISTER_SUPER_ACK for %s %s",
@@ -742,9 +750,9 @@ int main( int argc, char * const argv[] )
     {
         int opt;
 
-        while((opt = getopt_long(argc, argv, "ft:l:46vh", long_options, NULL)) != -1) 
+        while((opt = getopt_long(argc, argv, "ft:l:46vh", long_options, NULL)) != -1)
         {
-            switch (opt) 
+            switch (opt)
             {
             case 'l': /* local-port */
                 sss.lport = atoi(optarg);
@@ -769,7 +777,7 @@ int main( int argc, char * const argv[] )
                 break;
             }
         }
-        
+
     }
 
     /* enable ipv4 if there was no parameter provided */
@@ -872,7 +880,7 @@ static int run_loop( n2n_sn_t * sss )
 
     sss->start_time = time(NULL);
 
-    while(keep_running) 
+    while(keep_running)
     {
         int rc;
         ssize_t bread;
@@ -895,14 +903,14 @@ static int run_loop( n2n_sn_t * sss )
 
         now = time(NULL);
 
-        if(rc > 0) 
+        if(rc > 0)
         {
             struct sockaddr_storage  sender_sock;
             socklen_t i;
             i = sizeof(sender_sock);
 
-            if (FD_ISSET(sss->sock, &socket_mask)) 
-            {               
+            if (FD_ISSET(sss->sock, &socket_mask))
+            {
                 bread = recvfrom( sss->sock, pktbuf, N2N_SN_PKTBUF_SIZE, 0/*flags*/,
 				  (struct sockaddr *)&sender_sock, (socklen_t*)&i);
 
@@ -929,7 +937,7 @@ static int run_loop( n2n_sn_t * sss )
                 }
             }
 
-            if (FD_ISSET(sss->sock6, &socket_mask)) 
+            if (FD_ISSET(sss->sock6, &socket_mask))
             {
                 bread = recvfrom( sss->sock6, pktbuf, N2N_SN_PKTBUF_SIZE, 0/*flags*/,
 				  (struct sockaddr*) &sender_sock, (socklen_t*) &i);
@@ -957,7 +965,7 @@ static int run_loop( n2n_sn_t * sss )
                 }
             }
 
-            if (FD_ISSET(sss->mgmt_sock, &socket_mask)) 
+            if (FD_ISSET(sss->mgmt_sock, &socket_mask))
             {
                 bread = recvfrom( sss->mgmt_sock, pktbuf, N2N_SN_PKTBUF_SIZE, 0/*flags*/,
 				  (struct sockaddr *)&sender_sock, &i);
@@ -993,4 +1001,3 @@ static int run_loop( n2n_sn_t * sss )
 
     return 0;
 }
-
